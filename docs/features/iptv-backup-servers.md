@@ -63,3 +63,11 @@ log (the log only says "server 1 of 3 failed", never an address).
 
 Tests: `tests/iptvreserva.sh`, `tests/xtream.sh`, `tests/m3u.sh`,
 `tests/stalker_portal.sh`, `tests/ajustes_iptv_reserva.sh`.
+
+## Builds without an account server
+
+A build made without `NUVIO_SUPABASE_URL` / `NUVIO_SUPABASE_ANON_KEY` cannot
+sign in to a Nuvio account, so it no longer shows a login screen that cannot
+work: it opens straight into the home screen with local profiles, local add-ons
+and local Live TV accounts (`login_sem_conta()` in `src/login.c`). Builds with
+the account server configured behave exactly as before.

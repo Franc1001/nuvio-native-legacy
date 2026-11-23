@@ -5,13 +5,15 @@ name: Build Android APK
 # `tools/android.sh --debug-only` does on a computer, and uploads it as a
 # downloadable artifact: Actions tab -> Build Android APK -> the run -> Artifacts.
 #
-# The app signs in to the Nuvio account server, so the build needs the same
-# three values the official build uses. Add them once as repository secrets
-# (Settings -> Secrets and variables -> Actions -> New repository secret):
-#   NUVIO_SUPABASE_URL, NUVIO_SUPABASE_ANON_KEY, TV_LOGIN_WEB_BASE_URL
-# Optional: TMDB_API_KEY, TRAKT_CLIENT_ID, TRAKT_CLIENT_SECRET, SIMKL_CLIENT_ID,
-# SIMKL_APP_NAME, DISCORD_CLIENT_ID. Values never reach the log or the repo:
-# they go to local.properties (gitignored) inside the runner only.
+# No secrets needed: without the Nuvio account server the app opens straight
+# into the home screen with no login (login_sem_conta, src/login.c) and Live TV
+# works from the IPTV accounts added in Settings. Optional repository secrets
+# (Settings -> Secrets and variables -> Actions) turn on the matching features:
+#   NUVIO_SUPABASE_URL, NUVIO_SUPABASE_ANON_KEY, TV_LOGIN_WEB_BASE_URL (account
+#   login and sync), TMDB_API_KEY, TRAKT_CLIENT_ID, TRAKT_CLIENT_SECRET,
+#   SIMKL_CLIENT_ID, SIMKL_APP_NAME, DISCORD_CLIENT_ID.
+# Values never reach the log or the repo: they go to local.properties
+# (gitignored) inside the runner only.
 
 on:
   workflow_dispatch:
@@ -37,8 +39,6 @@ jobs:
       NUVIO_P2P_MOTOR: none
       # The C matroska core instead of the Rust one: no Rust toolchain needed.
       NUVIO_RUST_MKVCORE: "0"
-      # Stop early, listing only the names, when the account server is not configured.
-      NUVIO_REQUIRE_CORE: "1"
       NUVIO_ANDROID_CACHE: ${{ github.workspace }}/.cache/nuvio-android
 
     steps:

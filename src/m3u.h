@@ -39,6 +39,8 @@ void m3u_fontes_invalidar(void);
 // to the others; channel URLs served from the account's own host can be tried
 // on the other hosts too.
 #include "iptvreserva.h"
+int m3u_fonte_lista_em(unsigned id,int pos,char *url,unsigned n);  // playlist of the pos-th server tried
+void m3u_fonte_lista_usou(unsigned id,int pos);                      // that one answered
 int m3u_url_reserva(const char *id,const char *url,int pos,char *out,unsigned n);
 void m3u_canal_funcionou(const char *id,const char *url);
 int m3u_reservas_ler(IptvReservas *out,char *principal,unsigned n);

@@ -322,6 +322,31 @@ int m3u_fonte_urls(unsigned id,char *url,unsigned nUrl,char *grade,unsigned nGra
   if(!ok)url[0]=grade[0]=0;
   pthread_mutex_unlock(&trava);usarFonte(a);return ok;
 }
+// The guide downloads account playlists itself (guia.c m3uCarregar): it asks
+// for the playlist of each server in the order of attempts and reports which
+// one answered, so failover and "server in use" work there too.
+int m3u_fonte_lista_em(unsigned id,int pos,char *url,unsigned n) {
+  if(!url||!n||pos<0)return 0;
+  url[0]=0;
+  unsigned a=usarFonte(id);
+  pthread_mutex_lock(&trava);carregar();
+  int ordem[IPTVRES_MAX+1],k=lista[0]?iptvres_ordem(&reservas,lista,ordem):0;
+  int ok=pos<k&&listaDoServidor(ordem[pos],url,n);
+  if(!ok)url[0]=0;
+  pthread_mutex_unlock(&trava);usarFonte(a);return ok;
+}
+void m3u_fonte_lista_usou(unsigned id,int pos) {
+  unsigned a=usarFonte(id);
+  pthread_mutex_lock(&trava);carregar();
+  int ordem[IPTVRES_MAX+1],k=lista[0]?iptvres_ordem(&reservas,lista,ordem):0;
+  if(pos>0&&pos<k&&reservas.ativo!=ordem[pos]&&nv_perfil_sessao_travar(sessaoLida)) {
+    int antes=reservas.ativo;reservas.ativo=ordem[pos];
+    if(!gravarConfig(lista,epg))reservas.ativo=antes;
+    else {printf("[m3u] servidor em uso agora: %s\n",ordem[pos]?"reserva":"principal");fflush(stdout);}
+    nv_perfil_sessao_destravar();
+  }
+  pthread_mutex_unlock(&trava);usarFonte(a);
+}
 int m3u_fonte_epg(unsigned id,char *out,unsigned n){unsigned a=usarFonte(id);int r=m3u_url_epg(out,n);usarFonte(a);return r;}
 int m3u_fonte_total(unsigned id){unsigned a=usarFonte(id);int r=m3u_ultimo_total();usarFonte(a);return r;}
 void m3u_fonte_recarregar(unsigned id){unsigned a=usarFonte(id);m3u_recarregar();usarFonte(a);}

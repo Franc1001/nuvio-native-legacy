@@ -1605,7 +1605,14 @@ static int m3uCanal(const LtvM3uCanal *m, void *u) {
   return 1;
 }
 static int alimentarM3u(const char *d, size_t n, void *u) { return cargaAtual() && ltv_m3u_alimentar((LtvM3u *)u, d, n); }
+static int m3uCarregarDe(const LtvUrl *u, const char *chave, const char *epgUrl, const char *origem);
 static int m3uCarregar(const LtvUrl *u, const char *chave, const char *epgUrl) {
+  return m3uCarregarDe(u, chave, epgUrl, NULL);
+}
+// `origem`: the address channel IDs are derived from. For an account it is the
+// MAIN playlist, whichever backup served the list, so favourites and the guide
+// cache survive a server switch.
+static int m3uCarregarDe(const LtvUrl *u, const char *chave, const char *epgUrl, const char *origem) {
   static LtvM3u p;     // ~10 KB: fora da pilha do fio
   M3uCtx x;
   int st = 0, ok;
@@ -1614,7 +1621,7 @@ static int m3uCarregar(const LtvUrl *u, const char *chave, const char *epgUrl) {
   x.fl = chave ? sFonteChave(chave, LTV_M3U, u->nome, "") : sFonte(LTV_M3U, u->url, u->nome, "");
   if (x.fl < 0) return 0;
   x.nsel = sGruposEscolhidos(x.fl, x.sel, 256);
-  x.conta=chave && fonteConta(&sLtvF[x.fl],&x.contaId);x.origem=u->url;
+  x.conta=chave && fonteConta(&sLtvF[x.fl],&x.contaId);x.origem=origem && origem[0] ? origem : u->url;
   if(x.conta) {
     x.capIndice=1;while(x.capIndice<(unsigned)G_CANDIDATOS_MAX*2+1)x.capIndice*=2;
     x.indice=calloc(x.capIndice,sizeof *x.indice);if(!x.indice)return 0;
@@ -1632,6 +1639,7 @@ static int m3uCarregar(const LtvUrl *u, const char *chave, const char *epgUrl) {
   fflush(stdout);
   sLtvF[x.fl].respondeu = ok;
   if (!ok && !sLtvF[x.fl].nCanais) sLtvF[x.fl].erro = 1;
+  else if (sLtvF[x.fl].nCanais) sLtvF[x.fl].erro = 0;   // a backup answered after the main one failed
   return sLtvF[x.fl].nCanais;
 }
 
@@ -2089,8 +2097,15 @@ static void *fioGuia(void *u) {
     else if (c->tipo == IPTV_M3U) {
       LtvUrl u = {.tipo=LTV_URL_M3U}; char epgUrl[1024];
       snprintf(u.nome, sizeof u.nome, "%s", c->nome);
-      if (!m3u_fonte_urls(c->id, u.url, sizeof u.url, epgUrl, sizeof epgUrl)) continue;
-      n = m3uCarregar(&u, chave, epgUrl);
+      char principal[sizeof u.url];
+      if (!m3u_fonte_urls(c->id, principal, sizeof principal, epgUrl, sizeof epgUrl)) continue;
+      // BACKUP SERVERS (iptvreserva.h): the server in use first, then the
+      // others, until one sends channels.
+      for (int pos = 0; cargaAtual() && n <= 0 && m3u_fonte_lista_em(c->id, pos, u.url, sizeof u.url); pos++) {
+        if (pos) { printf("[ltv] m3u %s: servidor %d sem canais, tentando o proximo\n", chave, pos); fflush(stdout); }
+        n = m3uCarregarDe(&u, chave, epgUrl, principal);
+        if (n > 0) m3u_fonte_lista_usou(c->id, pos);
+      }
     } else continue;
     if (n > 0) ok = 1;
     else {

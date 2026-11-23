@@ -15,9 +15,13 @@
 // o Linux so aloca a pagina que e tocada: custa ~2,4 KB x canais lidos x 3,
 // e no teto 3000 x 2,4 KB x 3 = ~21,6 MB, em aparelhos de 2 GB ou mais. O
 // cache em disco do guia tem o mesmo tamanho (~7 MB no teto).
+// Android, this fork: IPTV panels commonly have several hundred live
+// categories (country x genre); 128 hid most of them, in panel order. The
+// channel ceiling that matters is ltv_teto_canais (30000, 5000 under 1.2 GB);
+// categories are cheap (a name per row), so allow up to 2000.
 #ifdef NV_ANDROID
 #define GUIACORTE_MAX_CANAL 3000
-#define GUIACORTE_MAX_CAT    128
+#define GUIACORTE_MAX_CAT   2000
 #else
 #define GUIACORTE_MAX_CANAL  900
 #define GUIACORTE_MAX_CAT     48

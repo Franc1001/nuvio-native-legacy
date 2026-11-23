@@ -3808,6 +3808,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK — дивитися  ·  утримуйте OK = обране  ·  ←→ — просунути сітку вперед  ·  утримуйте ↑↓ — перехід між розділами  ·  Назад — вийти"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK дивитися  ·  утримати OK = опції  ·  ←→ зсув програми  ·  ↑ джерела  ·  Назад вихід"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK дивитися  ·  утримати OK = опції  ·  ↑ джерела  ·  утримати ↑↓ пропуск розділу  ·  Назад вихід"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK дивитися  ·  \xe2\x86\x90 категорії  ·  утримуйте OK = параметри  ·  Назад — вихід"),
   T("OK avisa quando começar", "OK нагадає, коли почнеться"),
   T("OK começa · Voltar cancela", "OK — почати · Назад — скасувати"),
   T("OK continua · Voltar fecha", "OK — продовжити · Назад — закрити"),

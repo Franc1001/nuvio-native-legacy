@@ -3809,6 +3809,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK يشاهد  ·  ضغط مطول على OK = مفضلة  ·  ←→ يقدّم الشبكة  ·  ضغط مطول على ↑↓ يقفز بين الأقسام  ·  رجوع للخروج"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK مشاهدة  ·  ضغط مطول على OK = خيارات  ·  ←→ تحريك الدليل  ·  ↑ المصادر  ·  رجوع للخروج"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK مشاهدة  ·  ضغط مطول على OK = خيارات  ·  ↑ المصادر  ·  ضغط مطول على ↑↓ تخطي القسم  ·  رجوع للخروج"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK مشاهدة  ·  \xe2\x86\x90 الفئات  ·  اضغط مطولًا OK = خيارات  ·  رجوع للخروج"),
   T("OK avisa quando começar", "OK يذكّرك عند بدئه"),
   T("OK começa · Voltar cancela", "OK يبدأ · رجوع يلغي"),
   T("OK continua · Voltar fecha", "OK يتابع · رجوع يغلق"),

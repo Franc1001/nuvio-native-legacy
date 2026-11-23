@@ -3809,6 +3809,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK spiller av  ·  hold OK = favoritt  ·  ←→ flytter rutenettet fremover  ·  hold ↑↓ hopper mellom seksjoner  ·  Tilbake avslutter"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK se  ·  hold OK = valg  ·  ←→ flytt guiden  ·  ↑ kilder  ·  Tilbake avslutter"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK se  ·  hold OK = valg  ·  ↑ kilder  ·  hold ↑↓ hopper over seksjon  ·  Tilbake avslutter"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK se  ·  \xe2\x86\x90 kategorier  ·  hold OK = valg  ·  Tilbake avslutter"),
   T("OK avisa quando começar", "OK varsler deg når det starter"),
   T("OK começa · Voltar cancela", "OK starter · Tilbake avbryter"),
   T("OK continua · Voltar fecha", "OK fortsetter · Tilbake lukker"),

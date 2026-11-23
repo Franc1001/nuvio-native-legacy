@@ -3809,6 +3809,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK sleduje  ·  podržet OK = oblíbené  ·  ←→ posouvá mřížku dopředu  ·  podržet ↑↓ přeskočí sekce  ·  Zpět ukončí"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK sledovat  ·  podržet OK = možnosti  ·  ←→ posun průvodce  ·  ↑ zdroje  ·  Zpět ukončí"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK sledovat  ·  podržet OK = možnosti  ·  ↑ zdroje  ·  podržet ↑↓ přeskočí sekci  ·  Zpět ukončí"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK sledovat  ·  \xe2\x86\x90 kategorie  ·  podržte OK = možnosti  ·  Zpět ukončí"),
   T("OK avisa quando começar", "OK vám připomene, až to začne"),
   T("OK começa · Voltar cancela", "OK spustí · Zpět zruší"),
   T("OK continua · Voltar fecha", "OK pokračuje · Zpět zavře"),

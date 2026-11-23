@@ -3809,6 +3809,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK で再生  ·  OK 長押し = お気に入り  ·  ←→ で番組表を先へ送る  ·  ↑↓ 長押しでセクション移動  ·  戻るで終了"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK 視聴  ·  OK 長押し = オプション  ·  ←→ 番組表を移動  ·  ↑ ソース  ·  戻るで終了"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK 視聴  ·  OK 長押し = オプション  ·  ↑ ソース  ·  ↑↓ 長押しでセクション移動  ·  戻るで終了"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK 視聴  ·  \xe2\x86\x90 カテゴリ  ·  OK長押し = オプション  ·  戻るで終了"),
   T("OK avisa quando começar", "OK で開始時にお知らせ"),
   T("OK começa · Voltar cancela", "OK で開始 · 戻るでキャンセル"),
   T("OK continua · Voltar fecha", "OK で続行 · 戻るで閉じる"),

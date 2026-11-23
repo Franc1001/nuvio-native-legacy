@@ -99,11 +99,23 @@ jobs:
           path: ${{ env.NUVIO_ANDROID_CACHE }}
           key: android-deps-${{ hashFiles('tools/android/deps.sh', 'tools/android/ffmpeg-android.sh', 'tools/android.sh') }}
 
+      # Gradle's downloads (Android plugin, libraries) are kept between runs:
+      # Maven Central answers 429 Too Many Requests to repeated full downloads.
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
       - name: Native dependencies (curl, jpeg, webp)
         run: bash tools/android/deps.sh
 
+      # One retry after a pause: a 429 from Maven Central is temporary.
       - name: Build APK
-        run: bash tools/android.sh --debug-only
+        run: bash tools/android.sh --debug-only || { echo "retrying in 60 s"; sleep 60; bash tools/android.sh --debug-only; }
 
       - name: Save native dependencies cache
         if: always()

@@ -834,9 +834,9 @@ static int modoLista, modoLido;
 static void modoLer(void) {
   char *t = lerPerfil("modo");
   modoLido = 1;
-  modoLista = 0;
+  modoLista = NV_GUIA_SO_CANAIS;
   if (!t) return;
-  modoLista = !NV_GUIA_SO_CANAIS && !strncmp(t, "lista", 5);
+  modoLista = NV_GUIA_SO_CANAIS || !strncmp(t, "lista", 5);
   free(t);
 }
 
@@ -3533,7 +3533,7 @@ static void moverLista(int dir) {
 }
 
 static void alternarModo(void) {
-  if (NV_GUIA_SO_CANAIS) { modoLista = 0; return; }
+  if (NV_GUIA_SO_CANAIS) { modoLista = 1; janelaDesl = 0; return; }
 #ifdef NV_TOUCH_UI
   toqueLimpar();
 #endif
@@ -4350,7 +4350,12 @@ void guia_evento(const SDL_Event *e) {
   // "agora") SOBE AO CABECALHO — Cartoes/Lista/Addons — de qualquer linha.
   // Pedido do dono (21/09/2026): "se quiser trocar algo tem que subir a lista
   // toda". BAIXO no cabecalho volta para a linha em que estava.
-  if (modoLista) {
+  if (modoLista && NV_GUIA_SO_CANAIS) {
+    // CHANNEL LIST (TiviMate-like): no timeline to move; Left is the categories.
+    janelaDesl = 0;
+    if (k == SDLK_LEFT)  { catAbrir(2, 0); dicaUsou(); return; }
+    if (k == SDLK_RIGHT) return;
+  } else if (modoLista) {
     if (k == SDLK_LEFT)  { if (janelaDesl > 0) janelaDesl -= G_L_PASSO_MIN;
                            else { if (barraVisivel()) fontesEntrar(); else { focoTopo = 1; topoCol = G_TOPO_LISTA; } dicaUsou(); } return; }
     if (k == SDLK_RIGHT) { if (janelaDesl < G_L_DESL_MAX) janelaDesl += G_L_PASSO_MIN; return; }
@@ -6525,6 +6530,47 @@ static void desenharLinhaLista(GCanal *c, float y, int focada, float a,
   }
   if (alvo) *alvo = col;
 
+  // CHANNEL LIST (NV_GUIA_SO_CANAIS): one wide block with what is on now, its
+  // times and a progress bar; no timeline. No schedule: the fallback below.
+  if (NV_GUIA_SO_CANAIS && epg >= 0) {
+    EpgProg ps[4];
+    int n = gFaixa(c, agoraT, agoraT + 1, ps, 4), k;
+    if (n > 4) n = 4;
+    for (k = 0; k < n; k++) if (ps[k].ini <= agoraT && agoraT < ps[k].fim) break;
+    if (k < n) {
+      GfxRect b = { G_L_FAIXA_X + 3.0f, y, G_L_FAIXA_W - 6.0f, h };
+      if (focada && alvo) *alvo = b;
+      if (passo == 0) {
+        float f = anim_clamp((float)(agoraT - ps[k].ini) / (float)(ps[k].fim - ps[k].ini), 0.0f, 1.0f);
+        float ar3, ag3, ab3, bw = b.w - 28.0f;
+        ajustes_acento(&ar3, &ag3, &ab3);
+        gfx_cor(b, raioB, 1, 1, 1, (focada ? 0.12f : 0.06f) * a);
+        gfx_cor((GfxRect){ b.x + 14.0f, b.y + h - 6.0f, bw, 3.0f }, 0.5f, 1, 1, 1, 0.14f * a);
+        if (bw * f > 1.0f)
+          gfx_cor((GfxRect){ b.x + 14.0f, b.y + h - 6.0f, bw * f, 3.0f }, 0.5f, ar3, ag3, ab3, a);
+      } else {
+        char h1[12], h2[12], faixa[40];
+        int ct = focada ? 255 : 232, cm = focada ? 200 : 146;
+        float tx = b.x + 14.0f;
+        TxtLinha m, t;
+        fmtHora(ps[k].ini, h1, sizeof h1); fmtHora(ps[k].fim, h2, sizeof h2);
+        snprintf(faixa, sizeof faixa, "%s \xe2\x80\x93 %s", h1, h2);
+        m = txt_linha(gRetrato() ? TXT_V2_28 : TXT_DET_META2, faixa, cm, cm + 2, cm + 8, 255);
+        t = txt_linha_corta(textoRetrato ? TXT_V2_ROT : TXT_CW_TITULO, ps[k].titulo, ct, ct, ct, 255,
+                            b.w - 42.0f - (float)m.w);
+        if (h < 70.0f) {
+          txt_desenhar_alpha(t, tx, y + (h - (float)t.h) * 0.5f - 2.0f, a);
+          txt_desenhar_alpha(m, b.x + b.w - 14.0f - (float)m.w, y + (h - (float)m.h) * 0.5f - 2.0f, a);
+        } else {
+          txt_desenhar_alpha(t, tx, y + 7.0f, a);
+          txt_desenhar_alpha(m, tx, y + (gRetrato() ? 58.0f : 41.0f), a);
+        }
+      }
+      return;
+    }
+    epg = -2;   // nothing on now: the plain "no schedule" cell
+  }
+
   if (epg >= 0) {
     EpgProg ps[16];
     int n = gFaixa(c, ini, fimJ, ps, 16), k, desenhou = 0;
@@ -7583,7 +7629,8 @@ void guia_desenhar(Uint32 agora) {
   focoAnelTem = 0;
   if (modoLista && temLinhas) {
     time_t ini = janelaIni(agoraT);
-    int agoraVis = agoraT >= ini && agoraT < ini + (time_t)G_L_JANELA_MIN * 60;
+    // Channel list (NV_GUIA_SO_CANAIS): no time ruler and no "now" line.
+    int agoraVis = !NV_GUIA_SO_CANAIS && agoraT >= ini && agoraT < ini + (time_t)G_L_JANELA_MIN * 60;
     float agoraX = agoraVis ? G_L_FAIXA_X + (float)(agoraT - ini) / 60.0f
                               * (G_L_FAIXA_W / (float)G_L_JANELA_MIN)
                             : 0.0f;
@@ -7596,7 +7643,7 @@ void guia_desenhar(Uint32 agora) {
     ajustes_acento(&ar, &ag, &ab);
     if (fimY > G_L_BASE) fimY = G_L_BASE;
     // Rows share the page surface and extend through the screen edges.
-    desenharRegua(a, ini);
+    if (!NV_GUIA_SO_CANAIS) desenharRegua(a, ini);
     gfx_recorte(0.0f, G_L_TOPO - 8.0f, NV_TELA_W, G_L_BASE - G_L_TOPO + 8.0f);
     for (passo = 0; passo < 2; passo++) {
       float y = G_L_TOPO - rolL;
@@ -7788,11 +7835,13 @@ void guia_desenhar(Uint32 agora) {
   { const char *dica = modoLista
       ? (overlay
          ? GUIA_FECHA_L
+         : NV_GUIA_SO_CANAIS
+         ? i18n("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai")
          : i18n("OK assiste  ·  segure OK = opções  ·  \xe2\x86\x90\xe2\x86\x92 adianta a grade  ·  \xe2\x86\x91 fontes  ·  Voltar sai"))
       : (overlay
          ? GUIA_FECHA_G
          : i18n("OK assiste  ·  segure OK = opções  ·  \xe2\x86\x91 fontes  ·  segure \xe2\x86\x91\xe2\x86\x93 pula seção  ·  Voltar sai"));
-    if (dicaDesde && SDL_GetTicks() - dicaDesde < G_DICA_MS)
+    if (!NV_GUIA_SO_CANAIS && dicaDesde && SDL_GetTicks() - dicaDesde < G_DICA_MS)
       dica = i18n("← no primeiro canal: opções do guia");
     TxtLinha t = txt_linha_corta(TXT_CAPTION, dica, 128, 130, 138, 255,
                                  G_AREA_W);

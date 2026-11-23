@@ -3808,6 +3808,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK redă  ·  ține apăsat OK = favorit  ·  ←→ avansează grila  ·  ține apăsat ↑↓ sare între secțiuni  ·  Înapoi iese"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK vizionează  ·  ține OK = opțiuni  ·  ←→ mută ghidul  ·  ↑ surse  ·  Înapoi iese"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK vizionează  ·  ține OK = opțiuni  ·  ↑ surse  ·  ține ↑↓ sare secțiunea  ·  Înapoi iese"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK privește  ·  \xe2\x86\x90 categorii  ·  ține OK = opțiuni  ·  Înapoi iese"),
   T("OK avisa quando começar", "OK te anunță când începe"),
   T("OK começa · Voltar cancela", "OK pornește · Înapoi anulează"),
   T("OK continua · Voltar fecha", "OK continuă · Înapoi închide"),

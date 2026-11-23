@@ -3808,6 +3808,7 @@
   { "OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK watches  ·  hold OK = favorite  ·  ←→ moves the grid ahead  ·  hold ↑↓ jumps sections  ·  Back exits" },
   { "OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK watch  ·  hold OK = options  ·  ←→ move the guide  ·  ↑ sources  ·  Back exits" },
   { "OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK watch  ·  hold OK = options  ·  ↑ sources  ·  hold ↑↓ skip section  ·  Back exits" },
+  { "OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK watch  ·  \xe2\x86\x90 categories  ·  hold OK = options  ·  Back exits" },
   { "OK avisa quando começar", "OK reminds you when it starts" },
   { "OK começa · Voltar cancela", "OK starts · Back cancels" },
   { "OK continua · Voltar fecha", "OK continues · Back closes" },

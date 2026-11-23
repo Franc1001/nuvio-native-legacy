@@ -3809,6 +3809,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK để xem  ·  giữ OK = yêu thích  ·  ←→ dời lưới về phía trước  ·  giữ ↑↓ nhảy giữa các phần  ·  Quay lại để thoát"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK xem  ·  giữ OK = tùy chọn  ·  ←→ dịch lịch phát  ·  ↑ nguồn  ·  Quay lại để thoát"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK xem  ·  giữ OK = tùy chọn  ·  ↑ nguồn  ·  giữ ↑↓ bỏ qua mục  ·  Quay lại để thoát"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK xem  ·  \xe2\x86\x90 danh mục  ·  giữ OK = tùy chọn  ·  Quay lại để thoát"),
   T("OK avisa quando começar", "OK để nhắc bạn khi bắt đầu"),
   T("OK começa · Voltar cancela", "OK để bắt đầu · Quay lại để hủy"),
   T("OK continua · Voltar fecha", "OK để tiếp tục · Quay lại để đóng"),

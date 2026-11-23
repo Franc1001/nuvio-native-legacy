@@ -210,9 +210,20 @@ static float gPreviewLargura(void) {
 }
 // CATEGORIAS e o primeiro chip: a porta VISIVEL do painel de categorias,
 // que antes so abria segurando a seta (ninguem descobre gesto que nao se ve).
+// CHANNELS ONLY (this fork): the screen is "Live TV", not a TV guide. Channels
+// show as cards grouped by category, the category list opens with the screen,
+// and the EPG grid ("List") and its Cards/List switch are gone. Build with
+// -DNV_GUIA_SO_CANAIS=0 to get the original guide back.
+#ifndef NV_GUIA_SO_CANAIS
+#define NV_GUIA_SO_CANAIS 1
+#endif
 enum { G_TOPO_BUSCAR = 0, G_TOPO_CATEGORIAS, G_TOPO_CARTOES, G_TOPO_LISTA, G_TOPO_OPCOES, G_TOPO_ADDONS, G_TOPO_FILTROS, G_TOPO_DIAG,
        G_TOPO_LIMPAR, G_TOPO_PREVIEW, G_TOPO_N };
 #define G_TOPO_PRIMARIOS (G_TOPO_OPCOES + 1)
+// The Cards/List pair is not shown when there is only one view.
+static int gTopoOculto(int i) {
+  return NV_GUIA_SO_CANAIS && (i == G_TOPO_CARTOES || i == G_TOPO_LISTA);
+}
 
 #ifdef NV_TOUCH_UI
 static GfxRect gTopoRects[G_TOPO_N];
@@ -222,6 +233,7 @@ static void gTopoDistribuir(const float *larguras) {
   float x = G_AREA_X, y = G_CHIPS_Y;
   for (int i = 0; i < G_TOPO_PRIMARIOS; i++) {
     float w = fminf(larguras[i], G_AREA_W * 0.5f);
+    if (gTopoOculto(i)) { gTopoRects[i] = (GfxRect){x, y, 0, 0}; continue; }
     float grupo = w;
     if (i == G_TOPO_CARTOES)
       grupo += fminf(larguras[G_TOPO_LISTA], G_AREA_W * 0.5f);
@@ -824,7 +836,7 @@ static void modoLer(void) {
   modoLido = 1;
   modoLista = 0;
   if (!t) return;
-  modoLista = !strncmp(t, "lista", 5);
+  modoLista = !NV_GUIA_SO_CANAIS && !strncmp(t, "lista", 5);
   free(t);
 }
 
@@ -2636,6 +2648,7 @@ static int   pediuCanal; static CatItem pedido;
 // "Categorias" (fica aberto, OK entra, Voltar fecha). catFoco e a linha em
 // foco DENTRO do painel — o guia so muda de secao ao confirmar.
 static int    catAberto, catFoco;
+static int    catNaAbertura;   // NV_GUIA_SO_CANAIS: open the list once channels exist
 // A LISTA DE CATEGORIAS FICA (dono, 01/10/2026): aberta por segurar a seta
 // (modo 1), ao soltar ela vira a lista navegavel (modo 2) em vez de entrar
 // sozinha. Cima/baixo andam, OK ou direita entram, esquerda/Voltar fecham;
@@ -3013,6 +3026,7 @@ void guia_abrir(void) {
   previewUltLin = previewUltCol = -1; previewFocoMudou = SDL_GetTicks();
   focoValido();
   dicaTalvez();
+  catNaAbertura = NV_GUIA_SO_CANAIS;
 }
 
 // O CANAL NO AR VEM PARA O GUIA. O app ja mandou o player encolher para o
@@ -3504,6 +3518,7 @@ static void moverLista(int dir) {
 }
 
 static void alternarModo(void) {
+  if (NV_GUIA_SO_CANAIS) { modoLista = 0; return; }
 #ifdef NV_TOUCH_UI
   toqueLimpar();
 #endif
@@ -4090,7 +4105,7 @@ static int fontesEvento(SDL_Keycode k, Uint32 agora) {
   }
   if (k == SDLK_LEFT)  { if (fontesCol > 0) fontesCol--; return 1; }
   if (k == SDLK_RIGHT) { if (fontesCol + 1 < fontesN()) fontesCol++; return 1; }
-  if (k == SDLK_UP)    { focoFontes = 0; focoTopo = 1; topoCol = modoLista ? G_TOPO_LISTA : G_TOPO_CARTOES; return 1; }
+  if (k == SDLK_UP)    { focoFontes = 0; focoTopo = 1; topoCol = NV_GUIA_SO_CANAIS ? G_TOPO_CATEGORIAS : modoLista ? G_TOPO_LISTA : G_TOPO_CARTOES; return 1; }
   if (k == SDLK_DOWN)  { focoFontes = 0; focoValido(); return 1; }
   if (k == SDLK_RETURN || k == SDLK_KP_ENTER) {
     if (!fontesOkDesde) { fontesOkDesde = agora ? agora : 1; fontesOkLongo = 0; }
@@ -4279,8 +4294,12 @@ void guia_evento(const SDL_Event *e) {
   // a barra de fontes (ou as linhas), OK age. CIMA nao faz nada.
   if (focoTopo) {
     dirSeg = 0;
-    if (k == SDLK_LEFT)  { if (topoCol > 0) topoCol--; return; }
-    if (k == SDLK_RIGHT) { if (topoCol + 1 < G_TOPO_PRIMARIOS) topoCol++; return; }
+    if (k == SDLK_LEFT)  {
+      int c = topoCol - 1; while (c >= 0 && gTopoOculto(c)) c--;
+      if (c >= 0) topoCol = c; return; }
+    if (k == SDLK_RIGHT) {
+      int c = topoCol + 1; while (c < G_TOPO_PRIMARIOS && gTopoOculto(c)) c++;
+      if (c < G_TOPO_PRIMARIOS) topoCol = c; return; }
     if (k == SDLK_DOWN)  { focoTopo = 0; if (barraVisivel()) fontesEntrar(); return; }
     if (k == SDLK_RETURN || k == SDLK_KP_ENTER) {
       if (!e->key.repeat) topoAcionar(topoCol);
@@ -4295,7 +4314,7 @@ void guia_evento(const SDL_Event *e) {
     // Only a fresh Up at the first channel may leave the channel list.
     if (dir < 0 && fresco && focoLin == 0 && (!modoLista || focoCol == 0)) {
       focoTopo = 1; focoFontes = 0;
-      topoCol = modoLista ? G_TOPO_LISTA : G_TOPO_CARTOES;
+      topoCol = NV_GUIA_SO_CANAIS ? G_TOPO_CATEGORIAS : modoLista ? G_TOPO_LISTA : G_TOPO_CARTOES;
       dirSeg = 0;
       return;
     }
@@ -4929,7 +4948,14 @@ void guia_atualizar(float dt, Uint32 agora) {
   // O firmware nao garante KEYUP: silencio de G_REP_MS na seta que abriu o
   // painel por segurar vale como soltura.
   if (catAberto == 1 && !dirSeg) { catAberto = 2; catUlt = agora; }
-  if (catAberto == 2 && catUlt && agora - catUlt > G_CAT_OCIOSO_MS) catFechar();
+  // LIVE TV OPENS ON THE CATEGORIES: as soon as the channel list is there,
+  // the category list shows; OK enters one, Back shows all channels by row.
+  if (catNaAbertura && guia_visivel() && !overlay && nLinhas() > 0 && !catAberto) {
+    catNaAbertura = 0;
+    catAbrir(2, 0);
+    catUlt = 0;
+  }
+  if (!NV_GUIA_SO_CANAIS && catAberto == 2 && catUlt && agora - catUlt > G_CAT_OCIOSO_MS) catFechar();
   catAnim = anim_mola(catAnim, catAberto ? 1.0f : 0.0f, dt, 12.0f);
   if (catAberto || catAnim > 0.01f) {
     float areaH = G_CAT_BASE - G_CAT_TOPO;
@@ -6184,7 +6210,7 @@ static void gTopoRotulos(const char **rot) {
 
 static void gTopoLarguras(const char **rot, float *w) {
   for (int i = 0; i < G_TOPO_N; i++)
-    w[i] = (float)txt_largura(G_CHIP_TEXTO, rot[i])
+    w[i] = gTopoOculto(i) ? 0.0f : (float)txt_largura(G_CHIP_TEXTO, rot[i])
            + 2.0f * G_CHIP_PAD
            + (i == G_TOPO_PREVIEW ? 20.0f : (i == G_TOPO_CATEGORIAS || i == G_TOPO_BUSCAR) ? 26.0f : 0.0f);
 }
@@ -6208,7 +6234,7 @@ static void gTopoAjustar(float *w, float *xs, float right) {
   }
   for (int i = 0; i < G_TOPO_PRIMARIOS; i++) {
     xs[i] = x;
-    x += w[i] + (i == G_TOPO_CARTOES ? 0.0f : 12.0f);
+    x += w[i] + (i == G_TOPO_CARTOES || gTopoOculto(i) ? 0.0f : 12.0f);
   }
 }
 
@@ -6287,10 +6313,12 @@ static float desenharTopo(float a) {
 #ifdef NV_TOUCH_UI
     if (gRetrato()) tr.y = gTopoRects[G_TOPO_CARTOES].y;
 #endif
-    if (ajustes_vidro()) gfx_vidro_folha(tr, 0.5f, a);
+    if (gTopoOculto(G_TOPO_CARTOES)) {}
+    else if (ajustes_vidro()) gfx_vidro_folha(tr, 0.5f, a);
     else gfx_cor(tr, 0.5f, 0.114f, 0.118f, 0.137f, a); }
 
   for (i = 0; i < G_TOPO_PRIMARIOS; i++) {
+    if (gTopoOculto(i)) continue;
     float f = animTopo[i];
     int seg = i == G_TOPO_CARTOES || i == G_TOPO_LISTA;
     int sel = i == G_TOPO_PREVIEW ? previewLigado
@@ -7483,7 +7511,7 @@ void guia_desenhar(Uint32 agora) {
   { float chipsX = desenharTopo(a);
     char sub[160];
     TxtLinha t = txt_linha(TXT_ILHA_TITULO,
-                           overlay ? i18n("Guia de canais") : i18n("Guia TV"),
+                           overlay ? i18n("Guia de canais") : i18n(NV_GUIA_SO_CANAIS ? "TV ao vivo" : "Guia TV"),
                            243, 242, 239, 255);
     float sx = G_AREA_X + (float)t.w + 20.0f;
     txt_desenhar_alpha(t, G_AREA_X, G_TOPO_Y + (G_TOPO_H - (float)t.h) * 0.5f, a);

@@ -1,5 +1,6 @@
 #include "xtream.h"
 #include "iptvid.h"
+#include "iptvreserva.h"
 int ajustes_livetv_formato(void);  // ajustes.h puxa SDL; o teste do xtream nao
 #include "rede.h"
 #include "js.h"
@@ -47,10 +48,11 @@ typedef struct FonteContexto {
   int autoLimitada_; // Keep the login decision until this account/profile changes.
   int ultimaFalha_, ultimoHttp_, ultimoTotal_;
   int retryAfterUltimo_;
+  IptvReservas reservas_; // backup servers (iptvreserva.h), same user/password
   pthread_mutex_t trava_;
 } FonteContexto;
-#define IPTV_CTX_INICIALIZAR(c) do { (c)->perfilLido_ = -1; (c)->formatoOk_ = -1; pthread_mutex_init(&(c)->trava_, NULL); } while (0)
-#define IPTV_CTX_EMERGENCIA { .sid = UINT_MAX, .perfilLido_ = -1, .formatoOk_ = -1, .trava_ = PTHREAD_MUTEX_INITIALIZER }
+#define IPTV_CTX_INICIALIZAR(c) do { (c)->perfilLido_ = -1; (c)->formatoOk_ = -1; iptvres_zerar(&(c)->reservas_); pthread_mutex_init(&(c)->trava_, NULL); } while (0)
+#define IPTV_CTX_EMERGENCIA { .sid = UINT_MAX, .perfilLido_ = -1, .formatoOk_ = -1, .reservas_ = { .autoTroca = 1 }, .trava_ = PTHREAD_MUTEX_INITIALIZER }
 // NV_TPK40: rebuild this unit with pthread storage (tools/tpk.sh).
 #include "iptvcontexto.inc"
 #define ultimoHttp (contexto()->ultimoHttp_)
@@ -68,6 +70,7 @@ typedef struct FonteContexto {
 #define conexoesModo (contexto()->conexoesModo_ )
 #define autoLimitada (contexto()->autoLimitada_ )
 #define trava (contexto()->trava_ )
+#define reservas (contexto()->reservas_ )
 
 static const char *arquivo(void) {
   FonteFio *f = fonteFio();
@@ -106,6 +109,7 @@ static void carregarTravado(void) {
   perfilLido = p; sessaoLida = sessao; lido = 1;
   servidor[0] = usuario[0] = senha[0] = 0;
   memset(&conta, 0, sizeof conta); formatoOk = -1; conexoesModo = autoLimitada = 0;
+  iptvres_zerar(&reservas);
   b = dados_ler(arquivo());
   if (!b) return;
   for (linha = b; *linha; linha = fim) {
@@ -122,8 +126,10 @@ static void carregarTravado(void) {
     else if (!strcmp(linha, "conexoesModo")) {
       int m = atoi(sep); conexoesModo = m >= 0 && m <= 2 ? m : 0;
     }
+    else iptvres_ler_linha(&reservas, linha, sep);
   }
   free(b);
+  iptvres_ler_fim(&reservas);
 }
 
 void xtream_carregar(void) {
@@ -133,13 +139,21 @@ void xtream_carregar(void) {
 }
 
 static int gravar(void) {
-  char txt[640];
-  snprintf(txt, sizeof txt,
+  // Backups (iptvreserva.h) go in the same credential file: up to
+  // IPTVRES_MAX lines of IPTVRES_URL, so the buffer is on the heap.
+  size_t tam = 1024 + (size_t)IPTVRES_MAX * (IPTVRES_URL + 16);
+  char *txt = malloc(tam);
+  int ok;
+  if (!txt) return 0;
+  snprintf(txt, tam,
            "# CREDENCIAL. Usuario e senha do Xtream vao dentro de toda URL de\n"
            "# canal: valem como a assinatura. Nao versionar, nao empacotar, nao\n"
            "# colar em issue nem em log.\n"
            "servidor\t%s\nusuario\t%s\nsenha\t%s\nconexoesModo\t%d\n", servidor, usuario, senha, conexoesModo);
-  return dados_gravar(arquivo(), txt);
+  ok = iptvres_gravar(&reservas, txt, (unsigned)tam) && dados_gravar(arquivo(), txt);
+  memset(txt, 0, tam);
+  free(txt);
+  return ok;
 }
 
 // Tres setters e nao um: a tela edita um campo por vez, e um setter unico a
@@ -148,9 +162,12 @@ int xtream_definir_servidor(const char *s) {
   pthread_mutex_lock(&trava);
   carregarTravado();
   char anterior[sizeof servidor];memcpy(anterior,servidor,sizeof anterior);
+  int ativoAntes = reservas.ativo;
   normalizarServidor(s, servidor, sizeof servidor);
+  // A new main address is a deliberate choice: use it.
+  reservas.ativo = 0;
   int ok=gravar();
-  if(!ok)memcpy(servidor,anterior,sizeof anterior);
+  if(!ok) { memcpy(servidor,anterior,sizeof anterior); reservas.ativo = ativoAntes; }
   else { autoLimitada = 0; memset(&conta, 0, sizeof conta); }
   pthread_mutex_unlock(&trava);
   return ok;
@@ -162,10 +179,12 @@ int xtream_conta_definir(const char *s,const char *u,const char *p) {
   pthread_mutex_lock(&trava);carregarTravado();
   char antigoS[sizeof servidor],antigoU[sizeof usuario],antigoP[sizeof senha];
   memcpy(antigoS,servidor,sizeof antigoS);memcpy(antigoU,usuario,sizeof antigoU);memcpy(antigoP,senha,sizeof antigoP);
+  int ativoAntes=reservas.ativo, mudouServidor=strcmp(servidor,normal)!=0;
   snprintf(servidor,sizeof servidor,"%s",normal);snprintf(usuario,sizeof usuario,"%s",u);snprintf(senha,sizeof senha,"%s",p);
+  if(mudouServidor)reservas.ativo=0;
   int atual=nv_perfil_sessao_travar(sessaoLida),ok=atual && gravar();
   if(atual)nv_perfil_sessao_destravar();
-  if(!ok) { memcpy(servidor,antigoS,sizeof antigoS);memcpy(usuario,antigoU,sizeof antigoU);memcpy(senha,antigoP,sizeof antigoP); }
+  if(!ok) { memcpy(servidor,antigoS,sizeof antigoS);memcpy(usuario,antigoU,sizeof antigoU);memcpy(senha,antigoP,sizeof antigoP);reservas.ativo=ativoAntes; }
   else { autoLimitada=0; memset(&conta,0,sizeof conta);formatoOk=-1; }
   memset(antigoP,0,sizeof antigoP);pthread_mutex_unlock(&trava);return ok;
 }
@@ -191,6 +210,7 @@ void xtream_esquecer(void) {
   dados_apagar(arquivo());
   conexoesModo = autoLimitada = 0; memset(&conta, 0, sizeof conta); formatoOk = -1;
   servidor[0] = usuario[0] = senha[0] = 0;
+  iptvres_zerar(&reservas);
   lido = 1; perfilLido = perfis_ativo();
   pthread_mutex_unlock(&trava);
 }
@@ -266,9 +286,13 @@ int xtream_url_limitada(const char *url) {
   int on = 0;
   pthread_mutex_lock(&trava); carregarTravado();
   if (url && servidor[0] && limitadaTravado()) {
-    size_t n = strlen(servidor);
-    if (!strncmp(url, servidor, n) && (!strncmp(url + n, "/live/", 6) ||
-        !strncmp(url + n, "/movie/", 7) || !strncmp(url + n, "/series/", 8))) on = 1;
+    int total = iptvres_total(&reservas, servidor);
+    for (int k = 0; k < total && !on; k++) {
+      const char *srv = iptvres_servidor(&reservas, servidor, k);
+      size_t n = strlen(srv);
+      if (!strncmp(url, srv, n) && (!strncmp(url + n, "/live/", 6) ||
+          !strncmp(url + n, "/movie/", 7) || !strncmp(url + n, "/series/", 8))) on = 1;
+    }
   }
   pthread_mutex_unlock(&trava); return on;
 }
@@ -305,27 +329,14 @@ static pthread_mutex_t travaRede = PTHREAD_MUTEX_INITIALIZER;
 // Retry-After do ultimo pedido ao painel (s; 0 = nao veio). xtepg.c le depois
 // de um 429.
 
-static char *chamarSt(const char *acao, int prazo, int *status, NvPerfilSessao sessao) {
-  char srv[256], u[300], s[300], url[1100];
+// One request to one panel address. NULL with *status -1 when the profile
+// session changed meanwhile (the caller must stop, not fail over).
+static char *pedirPainel(const char *srv, const char *url, int prazo, int *status, NvPerfilSessao sessao) {
   char *r;
   int st = 0;
-  if (status) *status = 0;
-  pthread_mutex_lock(&trava);
-  if (!nv_perfil_sessao_travar(sessao)) { pthread_mutex_unlock(&trava); return NULL; }
-  carregarTravado();
-  snprintf(srv, sizeof srv, "%s", servidor);
-  urlenc(usuario, u, sizeof u);
-  urlenc(senha, s, sizeof s);
-  nv_perfil_sessao_destravar();
-  pthread_mutex_unlock(&trava);
-  if (!srv[0] || !u[0] || !s[0]) return NULL;
-  if (acao && acao[0])
-    snprintf(url, sizeof url, "%s/player_api.php?username=%s&password=%s&action=%s",
-             srv, u, s, acao);
-  else
-    snprintf(url, sizeof url, "%s/player_api.php?username=%s&password=%s", srv, u, s);
+  *status = 0;
   pthread_mutex_lock(&travaRede);
-  if (!nv_perfil_sessao_atual(sessao)) { pthread_mutex_unlock(&travaRede); return NULL; }
+  if (!nv_perfil_sessao_atual(sessao)) { pthread_mutex_unlock(&travaRede); *status = -1; return NULL; }
 #if XT_PROXY
   // SAMSUNG (#112): o Chromium do Tizen barra TODO `http://` que sai do app
   // (log D1 1647, 1.4.1: a lista morria aqui com o painel respondendo CORS),
@@ -345,23 +356,106 @@ static char *chamarSt(const char *acao, int prazo, int *status, NvPerfilSessao s
     snprintf(via, sizeof via, "%s/v1/xtream", NV_REC_URL);
     r = rede_postar_st(via, prazo, cab, url, &st);
     pthread_mutex_unlock(&travaRede);
-    if (!nv_perfil_sessao_atual(sessao)) { free(r); return NULL; }
-    if (status) *status = st;
+    if (!nv_perfil_sessao_atual(sessao)) { free(r); *status = -1; return NULL; }
+    *status = st;
     return r;
   }
+#else
+  (void)srv;
 #endif
   r = rede_baixar_st_retry(url, prazo, NULL, &st, &retryAfterUltimo);
   pthread_mutex_unlock(&travaRede);
-  if (!nv_perfil_sessao_atual(sessao)) { free(r); return NULL; }
-  if (status) *status = st;
+  if (!nv_perfil_sessao_atual(sessao)) { free(r); *status = -1; return NULL; }
+  *status = st;
   return r;
+}
+
+static int classificar(const char *c);
+enum { XC_VAZIO, XC_JSON, XC_HTML, XC_OUTRO };
+
+// The panel answered from backup `k` (iptvreserva.h): it becomes the server in
+// use, so the next list, the EPG and the channel URLs go there first. Only if
+// the account still has that same address (Settings may have changed it).
+static void servidorFuncionou(int k, const char *srv, NvPerfilSessao sessao) {
+  pthread_mutex_lock(&trava);
+  if (nv_perfil_sessao_travar(sessao)) {
+    carregarTravado();
+    const char *atual = iptvres_servidor(&reservas, servidor, k);
+    if (atual && !strcmp(atual, srv) && reservas.ativo != k) {
+      int antes = reservas.ativo;
+      reservas.ativo = k;
+      if (!gravar()) reservas.ativo = antes;
+      else { printf("[xtream] servidor em uso agora: %s\n", k ? "reserva" : "principal"); fflush(stdout); }
+    }
+    nv_perfil_sessao_destravar();
+  }
+  pthread_mutex_unlock(&trava);
+}
+
+// Copia do cadastro sob a trava e a chamada fora dela: uma resposta de 2 MB
+// (servidor com 20 mil canais) nao pode segurar a tela de Ajustes.
+//
+// COM O STATUS HTTP (#158). A primeira versao devolvia so o corpo: 401, 403,
+// 458, 429, pagina HTML de Cloudflare e prazo estourado chegavam todos como
+// NULL, e o log dizia "nao respondeu" para qualquer um deles. Agora a chamada
+// devolve o corpo mesmo em 4xx/5xx e o codigo em *status (0 = nem houve
+// resposta); quem chama decide o que e erro.
+//
+// EM SERIE. Os paineis Xtream respondem 429 a rajadas (a pesquisa do #158
+// cita 7 chamadas paralelas derrubando um painel XUI), e agora ha dois fios
+// que falam com ele: o do guia (lista) e o da grade curta (xtream_epg_curto).
+// Uma trava so para a rede do Xtream faz os dois esperarem a vez.
+//
+// BACKUP SERVERS. The server in use is asked first; when it is down or
+// blocked (iptvres_falhou) and automatic switching is on, the same request
+// goes to the next address of the account. The one that answers becomes the
+// server in use. Account answers (wrong password, screens full, 429) never
+// switch: every address of the provider would say the same.
+static char *chamarSt(const char *acao, int prazo, int *status, NvPerfilSessao sessao) {
+  char srv[IPTVRES_MAX + 1][256], u[300], s[300], url[1100];
+  int idx[IPTVRES_MAX + 1], n, i;
+  if (status) *status = 0;
+  pthread_mutex_lock(&trava);
+  if (!nv_perfil_sessao_travar(sessao)) { pthread_mutex_unlock(&trava); return NULL; }
+  carregarTravado();
+  n = iptvres_ordem(&reservas, servidor, idx);
+  for (i = 0; i < n; i++) snprintf(srv[i], sizeof srv[i], "%s", iptvres_servidor(&reservas, servidor, idx[i]));
+  urlenc(usuario, u, sizeof u);
+  urlenc(senha, s, sizeof s);
+  nv_perfil_sessao_destravar();
+  pthread_mutex_unlock(&trava);
+  if (!n || !srv[0][0] || !u[0] || !s[0]) return NULL;
+  for (i = 0; i < n; i++) {
+    char *r;
+    int st = 0, html;
+    if (acao && acao[0])
+      snprintf(url, sizeof url, "%s/player_api.php?username=%s&password=%s&action=%s",
+               srv[i], u, s, acao);
+    else
+      snprintf(url, sizeof url, "%s/player_api.php?username=%s&password=%s", srv[i], u, s);
+    r = pedirPainel(srv[i], url, prazo, &st, sessao);
+    memset(url, 0, sizeof url);
+    if (st < 0) return NULL;
+    html = classificar(r) == XC_HTML;
+    if (i + 1 < n && iptvres_falhou(st, html)) {
+      // Index only: addresses and credentials never go to the log.
+      printf("[xtream] servidor %d de %d falhou (HTTP %d%s): tentando o proximo\n",
+             i + 1, n, st, html ? ", pagina HTML" : "");
+      fflush(stdout);
+      free(r);
+      continue;
+    }
+    if (i > 0 && !iptvres_falhou(st, html)) servidorFuncionou(idx[i], srv[i], sessao);
+    if (status) *status = st;
+    return r;
+  }
+  return NULL;
 }
 #define retryCanal (fonteFio()->retry)
 int xtream_ultimo_retry_after(void) { return retryCanal; }
 
 // O que veio no corpo, para o log e para a tela: JSON (comeca com { ou [),
 // pagina HTML (Cloudflare, painel de erro, portal cativo) ou nada.
-enum { XC_VAZIO, XC_JSON, XC_HTML, XC_OUTRO };
 static int classificar(const char *c) {
   if (!c) return XC_VAZIO;
   if ((unsigned char)c[0] == 0xEF && (unsigned char)c[1] == 0xBB && (unsigned char)c[2] == 0xBF) c += 3;
@@ -447,6 +541,14 @@ int xtream_ultimo_http(void) { return ultimoHttp; }
 
 static int contaLerSessao(XtreamConta *out, NvPerfilSessao sessao);
 
+// The panel refused the login: {"user_info":{"auth":0}}. Parsed, not matched
+// as text: panels that pretty-print JSON send "auth": 0 (with a space) or
+// "auth":"0", and those were reported as "no answer" instead of "refused".
+static int authZero(const char *corpo) {
+  XtreamConta c;
+  return corpo && xtream_conta_parse(corpo, &c) && c.valido && !c.auth;
+}
+
 static int catIndice(const XtCat *cats, int n, const char *id) {
   // Categories are sorted by ID; preserve the first panel definition.
   int lo = 0, hi = n;
@@ -491,7 +593,7 @@ int xtream_canais_cb_sessao(void (*cat)(const char *nome, int ordem, int n, void
     // 458 e o limite de telas; 429 e rajada. O numero vai para a tela.
     printf("[xtream] lista de canais: HTTP %d (%s, %ld B)\n", st, nomeClasse(classe),
            (long)strlen(corpo));
-    ultimaFalha = (strstr(corpo, "\"auth\":0") || st == 401) ? XT_RECUSOU
+    ultimaFalha = (authZero(corpo) || st == 401) ? XT_RECUSOU
                 : (st == 502 || st == 504) ? XT_SEM_RESPOSTA : XT_HTTP;
     free(corpo); free(cats);
     return 0;
@@ -501,7 +603,7 @@ int xtream_canais_cb_sessao(void (*cat)(const char *nome, int ordem, int n, void
   // "senha errada".
   p = pulaBom(corpo);
   if (*p != '[') {
-    if (strstr(corpo, "\"auth\":0")) {
+    if (authZero(corpo)) {
       printf("[xtream] servidor recusou a credencial (auth 0)\n");
       ultimaFalha = XT_RECUSOU;
     } else {
@@ -632,7 +734,10 @@ int xtream_url_xmltv(char *url, unsigned n) {
 #endif
   urlenc(usuario, u, sizeof u);
   urlenc(senha, s, sizeof s);
-  snprintf(url, n, "%s/xmltv.php?username=%s&password=%s", servidor, u, s);
+  // The server in use: when the main one is down, the guide comes from the
+  // backup that answered the channel list.
+  { const char *srv = iptvres_servidor(&reservas, servidor, reservas.ativo);
+    snprintf(url, n, "%s/xmltv.php?username=%s&password=%s", srv ? srv : servidor, u, s); }
   pthread_mutex_unlock(&trava);
   return 1;
 }
@@ -782,23 +887,54 @@ void xtream_formato_funcionou(const char *url) {
   const char *q;
   size_t n;
   if (!url) return;
+  // The TS proxy wraps the panel URL (proxyts.h); the server is the inner one.
+  if (!strncmp(url, "nvproxy:", 8)) url += 8;
+  // A channel that played from a backup moves the account to that backup: the
+  // next channel (and the next list) starts where the stream actually works.
+  pthread_mutex_lock(&trava);
+  carregarTravado();
+  { int k = iptvres_indice_da_url(&reservas, servidor, url);
+    if (k >= 0 && k != reservas.ativo && reservas.autoTroca) {
+      int antes = reservas.ativo;
+      reservas.ativo = k;
+      if (!gravar()) reservas.ativo = antes;
+      else { printf("[xtream] canal tocou pelo servidor %s: passa a ser o servidor em uso\n", k ? "reserva" : "principal"); fflush(stdout); }
+    } }
+  pthread_mutex_unlock(&trava);
   q = strchr(url, '?');
   n = q ? (size_t)(q - url) : strlen(url);
   if (n > 3 && !strncmp(url + n - 3, ".ts", 3)) formatoOk = 1;
   else if (n > 5 && !strncmp(url + n - 5, ".m3u8", 5)) formatoOk = 0;
 }
 
-static int urlFormato(const char *id, const char *ext, char *url, unsigned n) {
+// `pos` is the place in the order of attempts (iptvres_ordem): 0 is the
+// server in use, 1.. the other addresses of the account when automatic
+// switching is on. 0 when there is no such address.
+static int urlFormato(const char *id, const char *ext, int pos, char *url, unsigned n) {
   char u[300], s[300];
-  if (!xtream_e_id(id) || !url || n < 2 || !ext || !ext[0]) return 0;
+  int idx[IPTVRES_MAX + 1], k;
+  const char *srv;
+  if (!xtream_e_id(id) || !url || n < 2 || !ext || !ext[0] || pos < 0) return 0;
   pthread_mutex_lock(&trava);
   carregarTravado();
   if (!servidor[0] || !usuario[0] || !senha[0]) { pthread_mutex_unlock(&trava); return 0; }
+  k = iptvres_ordem(&reservas, servidor, idx);
+  if (pos >= k || !(srv = iptvres_servidor(&reservas, servidor, idx[pos]))) { pthread_mutex_unlock(&trava); return 0; }
   urlenc(usuario, u, sizeof u);
   urlenc(senha, s, sizeof s);
-  snprintf(url, n, "%s/live/%s/%s/%s.%s", servidor, u, s, id + 7, ext);
+  snprintf(url, n, "%s/live/%s/%s/%s.%s", srv, u, s, id + 7, ext);
   pthread_mutex_unlock(&trava);
   return 1;
+}
+// How many addresses a channel can be tried on (1 without backups or with
+// automatic switching off).
+static int servidoresTentaveis(void) {
+  int idx[IPTVRES_MAX + 1], k;
+  pthread_mutex_lock(&trava);
+  carregarTravado();
+  k = iptvres_ordem(&reservas, servidor, idx);
+  pthread_mutex_unlock(&trava);
+  return k;
 }
 
 // --- grade curta por canal (#158) -------------------------------------------
@@ -934,8 +1070,15 @@ int xtream_fonte_total(unsigned id) {
   unsigned a = usarFonte(id); int r = xtream_ultimo_total(); usarFonte(a); return r;
 }
 int xtream_url_formato(const char *id, const char *ext, char *url, unsigned n) {
+  return xtream_url_formato_em(id, ext, 0, url, n);
+}
+int xtream_url_formato_em(const char *id, const char *ext, int pos, char *url, unsigned n) {
   unsigned f; char original[80]; if (!iptvid_ler("xtream:", id, &f, original, sizeof original)) return 0;
-  unsigned a = usarFonte(f); int r = urlFormato(original, ext, url, n); usarFonte(a); return r;
+  unsigned a = usarFonte(f); int r = urlFormato(original, ext, pos, url, n); usarFonte(a); return r;
+}
+int xtream_servidores_canal(const char *id) {
+  unsigned f; if (!iptvid_ler("xtream:", id, &f, NULL, 0)) return 0;
+  unsigned a = usarFonte(f); int r = servidoresTentaveis(); usarFonte(a); return r;
 }
 int xtream_epg_curto(const char *id, XtreamProg *out, int max, int *status) {
   unsigned f; char original[80]; if (status) *status = 0;
@@ -961,10 +1104,47 @@ int xtream_fonte_estado(unsigned id, int *http) {
   unsigned a = usarFonte(id); int r = xtream_ultima_falha(); if (http) *http = xtream_ultimo_http(); usarFonte(a); return r;
 }
 
+// --- backup servers, for Settings (selected account) ----------------------
+int xtream_reservas_ler(IptvReservas *out, char *principal, unsigned n) {
+  int ok;
+  pthread_mutex_lock(&trava);
+  carregarTravado();
+  if (out) *out = reservas;
+  if (principal && n) snprintf(principal, n, "%s", servidor);
+  ok = servidor[0] != 0;
+  pthread_mutex_unlock(&trava);
+  return ok;
+}
+int xtream_reservas_mudar(int (*f)(IptvReservas *r, const char *principal, void *u), void *u) {
+  IptvReservas *antes;
+  int ok = 0;
+  if (!f || !(antes = malloc(sizeof *antes))) return 0;
+  pthread_mutex_lock(&trava);
+  carregarTravado();
+  *antes = reservas;
+  if (servidor[0] && f(&reservas, servidor, u)) {
+    int atual = nv_perfil_sessao_travar(sessaoLida);
+    ok = atual && gravar();
+    if (atual) nv_perfil_sessao_destravar();
+  }
+  if (!ok) reservas = *antes;
+  pthread_mutex_unlock(&trava);
+  free(antes);
+  return ok;
+}
+int xtream_normalizar_servidor(const char *entrada, char *dst, unsigned tam) {
+  if (!dst || !tam) return 0;
+  dst[0] = 0;
+  if (!entrada || strlen(entrada) >= 256 || strpbrk(entrada, "\r\n\t")) return 0;
+  normalizarServidor(entrada, dst, tam);
+  return dst[0] != 0;
+}
+
 void xtream_fontes_invalidar(void) {
   pthread_mutex_lock(&fontesTrava);
   for(FonteContexto *c=fontesContextos;c;c=c->proximo){ pthread_mutex_lock(&c->trava_); c->lido_=0;
     c->servidor_[0]=c->usuario_[0]=c->senha_[0]=0;memset(&c->conta_,0,sizeof c->conta_);c->formatoOk_=-1;
+    iptvres_zerar(&c->reservas_);
     c->conexoesModo_=c->autoLimitada_=0;
     pthread_mutex_unlock(&c->trava_); }
   pthread_mutex_unlock(&fontesTrava);

@@ -11,13 +11,9 @@
 static char disco[2048]; static int temDisco;
 char *dados_ler(const char *nome) { (void)nome; return temDisco ? strdup(disco) : NULL; }
 int dados_gravar(const char *nome, const char *c) { (void)nome; snprintf(disco, sizeof disco, "%s", c); temDisco = 1; return 1; }
-void dados_apagar(const char *nome) { (void)nome; temDisco = 0; }
+int dados_apagar(const char *nome) { (void)nome; temDisco = 0; return 1; }
 static int perfil = 1;
 int perfis_ativo(void) { return perfil; }
-uint64_t perfis_sessao_geracao(void) { return 0; }
-int perfis_sessao_atual(uint64_t g) { return g == 0; }
-int perfis_sessao_travar(uint64_t g) { return g == 0; }
-void perfis_sessao_destravar(void) {}
 
 static const char *okPrefixo;   // url que "responde" ao handshake
 static char urls[32][300]; static int nUrls; static char ultimoRef[300], primeiroRef[300];
@@ -32,6 +28,13 @@ char *rede_baixar_com(const char *url, int segundos, const char *const *cab) {
   return strdup("<html>nao e portal</html>");
 }
 
+static int addPortal(IptvReservas *r, const char *principal, void *u) {
+  char n[300];
+  return stalker_normalizar_portal(u, n, sizeof n) && iptvres_adicionar(r, n, principal);
+}
+static int autoPortal(IptvReservas *r, const char *principal, void *u) {
+  (void)principal; r->autoTroca = *(int *)u; return 1;
+}
 static void confere(const char *entrada, const char *curto) {
   stalker_definir_portal(entrada);
   if (strcmp(stalker_portal_curto(), curto)) {
@@ -109,6 +112,42 @@ int main(void) {
   assert(strstr(urls[2], "http://solo.tv/stalker_portal/server/load.php?") == urls[2]);
   assert(strstr(urls[3], "http://solo.tv/server/load.php?") == urls[3]);   // 2a tentativa (renovacao)
   puts("ok  fallback para a raiz; host so inalterado");
+
+  // BACKUP PORTALS: same MAC, the main portal does not answer.
+  { IptvReservas r; int i, viuReserva = 0, zero = 0, um = 1;
+    stalker_definir_portal("main.tv:8080/c/");
+    assert(stalker_reservas_mudar(addPortal, "backup.tv:8080/c/"));
+    assert(!stalker_reservas_mudar(addPortal, "http://main.tv:8080"));     // the main one
+    assert(stalker_reservas_ler(&r, NULL, 0) && r.n == 1 && !strcmp(r.url[0], "http://backup.tv:8080"));
+    assert(strstr(disco, "reserva\thttp://backup.tv:8080\n"));
+    okPrefixo = "http://backup.tv:8080/server/load.php?";
+    nUrls = 0;
+    stalker_canais(sai, 4);
+    assert(strstr(urls[0], "http://main.tv:8080/server/load.php?") == urls[0]);
+    for (i = 0; i < nUrls; i++) if (strstr(urls[i], "http://backup.tv:8080/server/load.php?") == urls[i]) viuReserva = 1;
+    assert(viuReserva);
+    assert(stalker_reservas_ler(&r, NULL, 0) && r.ativo == 1 && strstr(disco, "reservaAtiva\t1\n"));
+    // Next session starts on the backup: its route is remembered.
+    stalker_definir_mac("00:1a:79:00:00:02");      // new token needed
+    nUrls = 0;
+    stalker_canais(sai, 4);
+    assert(nUrls >= 1 && strstr(urls[0], "http://backup.tv:8080/") == urls[0]);
+    puts("ok  portal de reserva: principal mudo, o de reserva da o token e vira o portal em uso");
+    // Manual mode: only the chosen portal.
+    assert(stalker_reservas_mudar(autoPortal, &zero));
+    okPrefixo = "http://main.tv:8080/server/load.php?";
+    stalker_definir_mac("00:1a:79:00:00:03");
+    nUrls = 0;
+    stalker_canais(sai, 4);
+    for (i = 0; i < nUrls; i++) assert(!strstr(urls[i], "main.tv"));
+    assert(stalker_reservas_mudar(autoPortal, &um));
+    okPrefixo = NULL;
+    // A new main portal goes back to it; forgetting drops the backups.
+    stalker_definir_portal("other.tv");
+    assert(stalker_reservas_ler(&r, NULL, 0) && r.ativo == 0 && r.n == 1);
+    stalker_esquecer();
+    assert(!stalker_reservas_ler(&r, NULL, 0) && r.n == 0);
+    puts("ok  portal de reserva: modo manual; novo principal; esquecer apaga"); }
   puts("stalker_portal: tudo ok");
   return 0;
 }

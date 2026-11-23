@@ -110,4 +110,12 @@ int stalker_fonte_canais(unsigned id,StalkerCanal *out,int max,uint64_t sessao);
 int stalker_fonte_canais_cb(unsigned id, StalkerCb cb, void *u, uint64_t sessao);
 void stalker_fonte_esquecer(unsigned id);
 void stalker_fontes_invalidar(void);
+
+// --- backup portals (iptvreserva.h), selected account ----------------------
+// Same MAC, other portal addresses. The handshake tries the portal in use,
+// then the others; the one that gives a token becomes the portal in use.
+#include "iptvreserva.h"
+int stalker_reservas_ler(IptvReservas *out, char *principal, unsigned n);
+int stalker_reservas_mudar(int (*f)(IptvReservas *r, const char *principal, void *u), void *u);
+int stalker_normalizar_portal(const char *entrada, char *dst, unsigned tam);
 #endif

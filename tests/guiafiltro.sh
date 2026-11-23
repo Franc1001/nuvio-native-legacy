@@ -60,7 +60,7 @@ git show e35ee7ac6:src/xtream.c | perl -0777 -pe 's/void xtream_definir_servidor
 for version in review current; do
   xt_source=src/xtream.c
   if [ "$version" = review ]; then xt_source="$work/xtream-category-review.c"; fi
-  cc "$xt_source" src/js.c tests/xtream.c -DXTREAM_LEGACY_FIXTURE -Isrc -O1 -Wno-macro-redefined -lpthread -o "$work/xtream-$version"
+  cc "$xt_source" src/iptvreserva.c src/js.c tests/xtream.c -DXTREAM_LEGACY_FIXTURE -Isrc -O1 -Wno-macro-redefined -lpthread -o "$work/xtream-$version"
   rc=0
   XTREAM_LATE_CATEGORY=1 "$work/xtream-$version" > "$work/xtream-$version.log" 2>&1 || rc=$?
   if [ "$version" = review ]; then

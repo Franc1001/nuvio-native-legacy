@@ -178,6 +178,9 @@ int  video_recarregar(void);
 // vez (video_modo_live_consumir zera); so a webOS le. Ver video_modo.c.
 void video_definir_modo_live(int modo);
 int  video_modo_live_consumir(void);
+// 1 while the stream being opened is a Live TV channel (set on every open).
+void video_definir_canal(int canal);
+int  video_canal(void);
 // Numero da tentativa (1..3) enquanto uma queda esta em curso, esperando ou
 // recarregando; 0 fora disso. Enquanto nao e 0, video_falhou fica em 0.
 int    video_reconectando(void);

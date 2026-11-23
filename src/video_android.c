@@ -909,7 +909,17 @@ static int abrirSessao(int inicioMs, int fracao) {
 
 int video_tocar_retomada(const char *u, double segundos, double pct) {
   static int limitedEnviado;
-  int limited = xtream_url_limitada(u);
+  // LIVE TV CHANNELS USE THE ONE-CONNECTION MODE, every account type. The
+  // default path is built for movie files: a Range probe, then a reopen, then
+  // parallel Range downloads. An IPTV panel serves a live channel as an
+  // endless stream and usually allows ONE connection per account, so the probe
+  // and the reopen overlap and the panel refuses the second ("screens full"),
+  // or the endless body never reaches the parallel downloader's length check.
+  // M3U links from Xtream panels (get.php?type=m3u&output=ts) give channel
+  // URLs with no extension (/user/pass/123), which took that path. The
+  // limited mode plays one connection at a time, waits for the previous one
+  // to close and does no probing: the way IPTV players open live TS.
+  int limited = xtream_url_limitada(u) || video_canal();
   if (mLimitedConnections && limited != limitedEnviado) {
     kInt(mLimitedConnections, limited); limitedEnviado = limited;
   }

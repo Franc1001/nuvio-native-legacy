@@ -56,10 +56,15 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
-
+      # The runner image already ships the Android SDK (ANDROID_HOME); add the
+      # exact NDK/platform/build-tools/CMake versions tools/android.sh checks.
       - name: Android SDK packages
-        run: sdkmanager "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1"
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKM" ] || SDKM="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | tail -1)"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" > /dev/null
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
 
       - name: Host tools
         run: sudo apt-get update && sudo apt-get install -y ffmpeg ninja-build

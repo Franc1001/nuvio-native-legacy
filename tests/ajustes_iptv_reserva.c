@@ -186,6 +186,20 @@ int main(void) {
   raiz();editar(IPTV_XTREAM,0);
   { IptvReservas r;assert(iptvconta_reservas(&r,NULL,0)==IPTV_XTREAM && r.n==1); }
   raiz();
+  // ADD-ONS ADDED BY HAND: add by link, list, remove (two OKs).
+  raiz();
+  assert(!ajOpcaoDisponivel(AJ_ADDON_LOCAL_LISTA) && !ajOpcaoDisponivel(AJ_ADDON_LOCAL_REM));
+  focarSecao(secDoItem[linha(AJ_ADDON_LOCAL_ADD)]);
+  tocar(AJ_ADDON_LOCAL_ADD);assert(teclado_aberto() && stCampo==AJ_ADDON_LOCAL_ADD);
+  salvarTeclado("stremio://addon.invalid/conf/manifest.json");
+  assert(addLocResultado==1 && addonslocais_n()==1 && addons_n()>=1);
+  tocar(AJ_ADDON_LOCAL_ADD);salvarTeclado("https://addon.invalid/conf/manifest.json");assert(addLocResultado==4);
+  tocar(AJ_ADDON_LOCAL_ADD);salvarTeclado("not a link");assert(addLocResultado==2);
+  assert(visivel(linha(AJ_ADDON_LOCAL_LISTA)) && !strcmp(textoValor(AJ_ADDON_LOCAL_LISTA),"addon.invalid"));
+  { char *f=dados_ler("addons-locais-p1.txt");assert(f && strstr(f,"addon.invalid\thttps://addon.invalid/conf/manifest.json"));free(f); }
+  tocar(AJ_ADDON_LOCAL_REM);assert(sairArmado==AJ_ADDON_LOCAL_REM);tocar(AJ_ADDON_LOCAL_REM);
+  assert(addonslocais_n()==0);
+  ok2("add-ons: add by link (stremio:// too), refuse repeats and bad links, remove with two OKs");
   puts("ajustes iptv reservas: PASS");
   return 0;
 }

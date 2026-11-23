@@ -30,6 +30,7 @@
 #include "addonsui.h"
 #include "pluginsui.h"
 #include "login.h"
+#include "addonslocais.h"
 #include "sessao.h"
 #include "perfis.h"
 #include "fontevolta.h"
@@ -3718,6 +3719,7 @@ static void perfilAbrirSessao(int antes) {
   // All hooks reset live state or reload profile-owned files. They neither
   // reload artwork nor wait for the old profile's network requests.
   addons_abrir_sessao();
+  addonslocais_carregar();   // add-ons added by hand on this device
   trakt_abrir_sessao();
   simkl_abrir_sessao();
   traktauth_trocar_perfil(perfis_ativo());
@@ -3862,6 +3864,9 @@ int app_iniciar(const char *dirArte) {
     } else {
       printf("[login] build sem servidor de conta: entrando sem login\n");
       fflush(stdout);
+      // No sync to start the home's catalog cycle: start it for the add-ons
+      // added on this device.
+      if (addonslocais_n() > 0) desc_repetir_silencioso();
     }
     // A ESCOLHA DE PERFIL ABRE AQUI, e nao daqui a alguns segundos.
     //

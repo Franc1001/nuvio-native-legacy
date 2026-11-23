@@ -54,7 +54,8 @@ int android_abrir_app(const char *pacote);
 int android_abrir_loja(const char *pacote, const char *nome);
 // #501: entrega a URL a outro player (ACTION_VIEW, video/*). `pacote` vazio =
 // o sistema escolhe. 1 = abriu.
-int android_abrir_externo(const char *url, const char *titulo, const char *pacote);
+// `cabs`: "Name: value" lines ("" = none), sent as header extras.
+int android_abrir_externo(const char *url, const char *titulo, const char *pacote, const char *cabs);
 // #501: players de video instalados, "pacote\tnome" por linha (malloc; NULL = falhou).
 char *android_listar_players(void);
 // Vigia do arranque (#266, ArranqueVigia.kt): a etapa do main() em que o fio do

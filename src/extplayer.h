@@ -31,6 +31,13 @@ int         extplayer_app_instalado(const char *pkg);
 // Nunca registra a URL.
 int  extplayer_tentar(const char *url, const char *titulo, int anime,
                       void (*interno)(const char *url), void (*sair)(void));
+// Live TV channel: Settings > Live TV > "Player da TV ao vivo". Same contract
+// as extplayer_tentar; the stream's headers go along to the outside app.
+// `antes` runs right before the outside app is launched (the in-app stream
+// lets go of a one-connection line); may be NULL.
+int  extplayer_tentar_canal(const char *url, const char *titulo, void (*antes)(void),
+                            void (*interno)(const char *url), void (*sair)(void));
+const char *extplayer_url_externa(const char *url);
 void extplayer_acao(const char *chave, int botao);
 void extplayer_passo(unsigned agora);
 #endif

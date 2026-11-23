@@ -8,16 +8,25 @@
 
 #ifdef NV_ANDROID
 #include "ilha.h"
-static int chamouInterno, chamouSair;
+static int chamouInterno, chamouSair, chamouAntes, modoCanal, abriu;
+static char abriuUrl[256], abriuCabs[256];
+static void antes(void) { chamouAntes++; }
 static unsigned relogio;
 static IlhaModal *modalVisto;
 static void interno(const char *url) { (void)url; chamouInterno++; }
 static void sair(void) { chamouSair++; }
 int ajustes_player_externo(int anime) { return anime ? -1 : EXTPLAYER_PERGUNTAR; }
 const char *ajustes_player_pacote(int anime) { (void)anime; return ""; }
+int ajustes_player_canal(void) { return modoCanal; }
+const char *ajustes_player_canal_pacote(void) { return ""; }
 char *android_listar_players(void) { return NULL; }
-const char *video_cabecalhos(void) { return ""; }
-int android_abrir_externo(const char *u, const char *t, const char *p) { (void)u; (void)t; (void)p; return 1; }
+static const char *cabsAgora = "";
+const char *video_cabecalhos(void) { return cabsAgora; }
+int android_abrir_externo(const char *u, const char *t, const char *p, const char *c) {
+  (void)t; (void)p; abriu++;
+  snprintf(abriuUrl, sizeof abriuUrl, "%s", u); snprintf(abriuCabs, sizeof abriuCabs, "%s", c);
+  return 1;
+}
 const char *i18n(const char *s) { return s; }
 void player_toast(const char *t, unsigned ms) { (void)t; (void)ms; }
 void ilha_avisar_ex(const IlhaAvisoEx *e) { if (e) modalVisto = (IlhaModal *)e->modal; }
@@ -74,6 +83,23 @@ int main(void) {
   // Botao 2 = "Externo": sem app externo no stub, cai no interno e sai.
   extplayer_tentar("u", "t", 0, interno, sair);
   extplayer_acao("extplayer:onde", 2); assert(chamouInterno == 2 && chamouSair == 1);
+
+  // Live TV channels: their own setting. Built-in = play here, nothing opened.
+  abriu = chamouAntes = 0; modoCanal = EXTPLAYER_INTERNO;
+  assert(extplayer_tentar_canal("http://h/live/u/p/1.ts", "Ch", antes, interno, sair) == 0 && !abriu && !chamouAntes);
+  // External: the in-app stream lets go first, the nvproxy: mark is dropped,
+  // and the line's headers go along (no fallback to the built-in player).
+  modoCanal = EXTPLAYER_EXTERNO; cabsAgora = "User-Agent: VLC/3.0\r\n";
+  assert(extplayer_tentar_canal("nvproxy:http://h/live/u/p/1.ts", "Ch", antes, interno, sair) == 1);
+  assert(abriu == 1 && chamouAntes == 1 && chamouSair == 2);
+  assert(!strcmp(abriuUrl, "http://h/live/u/p/1.ts") && strstr(abriuCabs, "User-Agent: VLC/3.0"));
+  // Ask: modal, then "Externo" launches with the headers kept from the ask.
+  modoCanal = EXTPLAYER_PERGUNTAR; abriu = 0; abriuCabs[0] = 0;
+  assert(extplayer_tentar_canal("http://h/2.ts", "Ch2", antes, interno, sair) == 1 && !abriu);
+  cabsAgora = "";
+  extplayer_acao("extplayer:onde", 2);
+  assert(abriu == 1 && chamouAntes == 2 && strstr(abriuCabs, "User-Agent"));
+  assert(!strcmp(extplayer_url_externa("nvproxy:x"), "x") && !strcmp(extplayer_url_externa("y"), "y"));
 #endif
   puts("extplayer_decisao: ok");
   return 0;

@@ -245,6 +245,7 @@ static int ajCenaSecao(int op) {
     case AJ_IPTV_RES_USO: case AJ_IPTV_RES_AUTO: case AJ_IPTV_RES_LISTA: case AJ_IPTV_RES_ADD:
     case AJ_IPTV_RES_REM:
       return AJC_TV_PROVEDOR;
+    case AJ_PLAYER_CANAL:
     case AJ_LIVETV_DIAG: case AJ_LIVETV_RES: case AJ_LIVETV_ESPERA: case AJ_LIVETV_FORMATO: case AJ_LIVETV_MODO:
     case AJ_LIVETV_PROXY:
       return AJC_TV_PROBLEMAS;

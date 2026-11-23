@@ -484,23 +484,23 @@ static int chamarBool(const char *nome, const char *assin, const char *a, const 
 int android_abrir_app(const char *pacote) {
   return chamarBool("abrirApp", "(Ljava/lang/String;)Z", pacote, NULL);
 }
-int android_abrir_externo(const char *url, const char *titulo, const char *pacote) {
+int android_abrir_externo(const char *url, const char *titulo, const char *pacote, const char *cabs) {
   JNIEnv *env = (JNIEnv *)SDL_AndroidGetJNIEnv();
   jobject act = (jobject)SDL_AndroidGetActivity();
   jclass cls = NULL;
   jmethodID m;
-  jstring js[3] = { NULL, NULL, NULL };
+  jstring js[4] = { NULL, NULL, NULL, NULL };
   int ok = 0, i;
-  const char *a[3] = { url, titulo ? titulo : "", pacote ? pacote : "" };
+  const char *a[4] = { url, titulo ? titulo : "", pacote ? pacote : "", cabs ? cabs : "" };
   if (!env || !act) return 0;
-  m = metodo(env, act, &cls, "abrirExterno", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z");
+  m = metodo(env, act, &cls, "abrirExterno", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z");
   if (m && !(*env)->ExceptionCheck(env)) {
-    for (i = 0; i < 3; i++) js[i] = (*env)->NewStringUTF(env, a[i]);
-    if (js[0] && js[1] && js[2] && !(*env)->ExceptionCheck(env))
-      ok = (*env)->CallBooleanMethod(env, act, m, js[0], js[1], js[2]) ? 1 : 0;
+    for (i = 0; i < 4; i++) js[i] = (*env)->NewStringUTF(env, a[i]);
+    if (js[0] && js[1] && js[2] && js[3] && !(*env)->ExceptionCheck(env))
+      ok = (*env)->CallBooleanMethod(env, act, m, js[0], js[1], js[2], js[3]) ? 1 : 0;
   }
   if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); ok = 0; }
-  for (i = 0; i < 3; i++) if (js[i]) (*env)->DeleteLocalRef(env, js[i]);
+  for (i = 0; i < 4; i++) if (js[i]) (*env)->DeleteLocalRef(env, js[i]);
   if (cls) (*env)->DeleteLocalRef(env, cls);
   (*env)->DeleteLocalRef(env, act);
   return ok;

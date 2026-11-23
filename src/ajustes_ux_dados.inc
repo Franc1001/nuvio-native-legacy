@@ -127,7 +127,7 @@ static void uxValorTexto(int op, int v, char *buf, size_t tam) {
     texto = !cod || !cod[0] ? "Da conta" : !strcmp(cod, "*") ? "Todas"
       : !strcmp(cod, "~") ? "Original do título" : ling_nome(cod);
     texto = i18n(texto);
-  } else if (op == AJ_PLAYER_EXTERNO || op == AJ_PLAYER_ANIME) {
+  } else if (op == AJ_PLAYER_EXTERNO || op == AJ_PLAYER_ANIME || op == AJ_PLAYER_CANAL) {
     texto = i18n(ppNome(op, v));
   } else if (op == AJ_SELOS_PACOTE) {
     texto = v > 0 && v <= selospacote_n() ? selospacote_nome(v - 1) : i18n("Do Nuvio");

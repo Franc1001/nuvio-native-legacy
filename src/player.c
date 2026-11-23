@@ -2211,10 +2211,25 @@ static void tocarFonteInterno(const char *url) {
 }
 #ifdef NV_ANDROID
 static void sairParaExterno(void) { saindo = 1; pediuSair = 1; }
+// The channel's own source address (before the in-app TS proxy), kept for the
+// OK-on-the-preview path, which grows the preview without a new tocarFonte.
+static char canalFonteUrl[2048];
+// IPTV lines often allow ONE connection: the in-app stream lets go before the
+// outside app connects.
+static void pararParaExterno(void) { video_parar(); comVideo = 0; }
 #endif
 static void tocarFonte(const char *url) {
 #ifdef NV_ANDROID
   const CatItem *c = item();   // #501: Interno / Externo / Perguntar sempre
+  // Live TV channel opened full screen: its own player setting. The list's
+  // small preview (mini) always plays here.
+  if (ehCanal()) {
+    snprintf(canalFonteUrl, sizeof canalFonteUrl, "%s", url);
+    if (!mini && extplayer_tentar_canal(url, c ? c->titulo : "", pararParaExterno,
+                                        tocarFonteInterno, sairParaExterno)) return;
+    tocarFonteInterno(url);
+    return;
+  }
   if (extplayer_tentar(url, c ? c->titulo : "", c && artehero_eh_anime(c), tocarFonteInterno, sairParaExterno)) return;
 #endif
   tocarFonteInterno(url);
@@ -3189,7 +3204,30 @@ void player_minimizar_para_guia(float x, float y, float w, float h) {
   janelaAnimar(de, miniDestino());
 }
 
+#ifdef NV_ANDROID
+static void restaurarBase(void);
+// "Ask" answered Built-in, or the outside app did not open: full screen here
+// (the stream comes back if it was already let go).
+static void restaurarInterno(const char *url) {
+  restaurarBase();
+  if (!comVideo && url && url[0]) tocarFonteInterno(url);
+}
+#endif
 void player_restaurar(void) {
+#ifdef NV_ANDROID
+  // OK on the channel playing in the Live TV preview = "watch it": the Live TV
+  // player setting decides where.
+  if (mini && ehCanal() && canalFonteUrl[0] && ajustes_player_canal() != EXTPLAYER_INTERNO) {
+    const CatItem *c = item();
+    static char u[2048];
+    snprintf(u, sizeof u, "%s", canalFonteUrl);
+    if (extplayer_tentar_canal(u, c ? c->titulo : "", pararParaExterno,
+                               restaurarInterno, player_fechar_mini)) return;
+  }
+  restaurarBase();
+}
+static void restaurarBase(void) {
+#endif
   if (!mini) return;
   if (miniGuia && comVideo) {
     // Do preview do guia para a tela cheia, crescendo, com o MESMO fluxo: nada

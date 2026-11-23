@@ -73,13 +73,23 @@ int extplayer_app_instalado(const char *pkg) {
 
 static int perguntaAberta;
 static Uint32 perguntaDesde;
-static char pendUrl[2048], pendTitulo[160];
+static char pendUrl[2048], pendTitulo[160], pendCabs[1024];
 static void (*pendInterno)(const char *);
 static void (*pendSair)(void);
 
-static void abrirExterno(const char *url, const char *titulo, const char *pkg,
-                         void (*interno)(const char *), void (*sair)(void)) {
-  if (android_abrir_externo(nv_media_url(url), titulo, pkg)) {
+// The address an outside app can open: the "nvproxy:" mark (our own TS proxy,
+// proxyts.h) is an in-app detail, so it goes.
+const char *extplayer_url_externa(const char *url) {
+  if (!url) return "";
+  if (!strncmp(url, "nvproxy:", 8)) url += 8;
+  return url;
+}
+
+static void (*pendAntes)(void);
+static void abrirExterno(const char *url, const char *titulo, const char *pkg, const char *cabs,
+                         void (*antes)(void), void (*interno)(const char *), void (*sair)(void)) {
+  if (antes) antes();
+  if (android_abrir_externo(extplayer_url_externa(nv_media_url(url)), titulo, pkg, cabs ? cabs : "")) {
     printf("[extplayer] aberto no player externo\n");
     sair();   // sem sincronia: o item fica como iniciado
     return;
@@ -89,27 +99,19 @@ static void abrirExterno(const char *url, const char *titulo, const char *pkg,
   interno(url);
 }
 
-int extplayer_tentar(const char *url, const char *titulo, int anime,
-                     void (*interno)(const char *url), void (*sair)(void)) {
-  int avisar, d, recuou;
-  const char *pkg;
-  if (!url || !url[0]) return 0;
-  if (perguntaAberta) return 1;   // modal aberto: o segundo pedido espera a resposta
-  extplayer_atualizar_apps();
-  d = extplayer_escolher(anime, ajustes_player_externo(0), ajustes_player_pacote(0),
-                         ajustes_player_externo(1), ajustes_player_pacote(1),
-                         extplayer_app_instalado, &pkg, &recuou);
-  if (recuou) printf("[extplayer] app salvo nao esta instalado; perguntando\n");
-  d = extplayer_decidir(d, video_cabecalhos(), &avisar);
-  if (avisar) player_toast(i18n("Player externo indisponível; usando o interno"), 3500u);
+// `cabs` goes to the outside app (MX Player, Just Player and others read
+// header extras); NULL = this kind of stream needs its headers kept in-app.
+static int tentarModo(const char *url, const char *titulo, int d, const char *pkg, const char *cabs,
+                      void (*antes)(void), void (*interno)(const char *url), void (*sair)(void)) {
   if (d == EXTPLAYER_INTERNO) return 0;
-  if (d == EXTPLAYER_EXTERNO) { abrirExterno(url, titulo, pkg ? pkg : "", interno, sair); return 1; }
+  if (d == EXTPLAYER_EXTERNO) { abrirExterno(url, titulo, pkg ? pkg : "", cabs, antes, interno, sair); return 1; }
   {
     static IlhaModal m;
     IlhaAvisoEx e;
     snprintf(pendUrl, sizeof pendUrl, "%s", url);
     snprintf(pendTitulo, sizeof pendTitulo, "%s", titulo ? titulo : "");
-    pendInterno = interno; pendSair = sair;
+    snprintf(pendCabs, sizeof pendCabs, "%s", cabs ? cabs : "");
+    pendInterno = interno; pendSair = sair; pendAntes = antes;
     memset(&m, 0, sizeof m);
     snprintf(m.kicker, sizeof m.kicker, "%s", i18n("Player"));
     snprintf(m.titulo, sizeof m.titulo, "%s", i18n("Onde reproduzir?"));
@@ -128,13 +130,46 @@ int extplayer_tentar(const char *url, const char *titulo, int anime,
   }
 }
 
+int extplayer_tentar(const char *url, const char *titulo, int anime,
+                     void (*interno)(const char *url), void (*sair)(void)) {
+  int avisar, d, recuou;
+  const char *pkg;
+  if (!url || !url[0]) return 0;
+  if (perguntaAberta) return 1;   // modal aberto: o segundo pedido espera a resposta
+  extplayer_atualizar_apps();
+  d = extplayer_escolher(anime, ajustes_player_externo(0), ajustes_player_pacote(0),
+                         ajustes_player_externo(1), ajustes_player_pacote(1),
+                         extplayer_app_instalado, &pkg, &recuou);
+  if (recuou) printf("[extplayer] app salvo nao esta instalado; perguntando\n");
+  d = extplayer_decidir(d, video_cabecalhos(), &avisar);
+  if (avisar) player_toast(i18n("Player externo indisponível; usando o interno"), 3500u);
+  return tentarModo(url, titulo, d, pkg, "", NULL, interno, sair);
+}
+
+// Live TV channels have their own setting (Settings > Live TV > Player). An
+// IPTV line's headers (User-Agent, Referer from #EXTVLCOPT) travel with the
+// Intent instead of forcing the built-in player.
+int extplayer_tentar_canal(const char *url, const char *titulo, void (*antes)(void),
+                           void (*interno)(const char *url), void (*sair)(void)) {
+  int d, recuou;
+  const char *pkg;
+  if (!url || !url[0]) return 0;
+  if (perguntaAberta) return 1;
+  if (ajustes_player_canal() == EXTPLAYER_INTERNO) return 0;
+  extplayer_atualizar_apps();
+  d = extplayer_escolher(0, ajustes_player_canal(), ajustes_player_canal_pacote(), -1, "",
+                         extplayer_app_instalado, &pkg, &recuou);
+  if (recuou) printf("[extplayer] app salvo dos canais nao esta instalado; perguntando\n");
+  return tentarModo(url, titulo, d, pkg, video_cabecalhos(), antes, interno, sair);
+}
+
 static void concluir(int externo) {
   void (*interno)(const char *) = pendInterno;
   void (*sair)(void) = pendSair;
   perguntaAberta = 0;
-  if (externo) abrirExterno(pendUrl, pendTitulo, "", interno, sair);
+  if (externo) abrirExterno(pendUrl, pendTitulo, "", pendCabs, pendAntes, interno, sair);
   else interno(pendUrl);
-  pendUrl[0] = 0;
+  pendUrl[0] = pendCabs[0] = 0; pendAntes = NULL;
 }
 
 void extplayer_acao(const char *chave, int botao) {

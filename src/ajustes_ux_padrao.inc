@@ -355,3 +355,4 @@
   0, /* folder hero details: On (V_LIGA 0) */
   0, 0, 0, 0, 0, /* IPTV backup servers: the account file owns these values */
   0, 0, 0, /* add-ons added by hand: addons-locais-p<N>.txt owns them */
+  0, /* Live TV player: Built-in (V_PLAYER_EXTERNO 0) */

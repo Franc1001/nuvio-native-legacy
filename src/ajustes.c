@@ -734,6 +734,10 @@ typedef enum {
   // ADD-ONS ADDED BY HAND on this device (addonslocais.h): add by URL, the list,
   // remove. State in addons-locais-p<N>.txt, never in ajustes.txt.
   AJ_ADDON_LOCAL_ADD, AJ_ADDON_LOCAL_LISTA, AJ_ADDON_LOCAL_REM,
+  // Player for Live TV channels (Android): Built-in / External / Ask / an
+  // installed app, like AJ_PLAYER_EXTERNO; the app's package is line 3 of
+  // player-externo.txt. Device-local, append-only.
+  AJ_PLAYER_CANAL,
   AJ_N
 } OpcaoId;
 _Static_assert(DEBRID_RD == 0 && DEBRID_TB == 1 && DEBRID_PM == 2 && DEBRID_AD == 3,
@@ -1883,6 +1887,7 @@ static const Opcao OPCOES[AJ_N] = {
   ACAO("Adicionar addon pela URL"),
   ESC("Addons adicionados nesta TV", NULL, 1),       // dynamic
   ACAO("Remover o addon escolhido"),
+  ESC("Player da TV ao vivo", V_PLAYER_EXTERNO, 3),   // n real em nValores; local: playerCanalLocal
 };
 
 // Nome de cada opcao no arquivo. O formato era POSICIONAL — uma linha por
@@ -2218,6 +2223,7 @@ static const char *CHAVE[] = {
   "heroFolderDetailsLocal",
   "-iptvResUso", "-iptvResAuto", "-iptvResLista", "-iptvResAdd", "-iptvResRem",
   "-addonLocalAdd", "-addonLocalLista", "-addonLocalRem",
+  "playerCanalLocal",
 };
 // QUATRO VETORES PARALELOS indexados pelo mesmo enum AJ_*: OPCOES, CHAVE,
 // valor e as secoes. OPCOES ja e declarado [AJ_N], e `valor` aceita inicializacao
@@ -3340,7 +3346,7 @@ void ajustes_definir_estat_lado(int esquerda) {
 // vem deslocado em 1. O indice de uma lista de apps nao e estavel (instala-se e
 // desinstala-se), entao o que vale e o PACOTE, em player-externo.txt (linha 1 filmes,
 // linha 2 anime); o numero em ajustes.txt e so o espelho dele (ppReconciliar).
-static char ppPkg[2][96];
+static char ppPkg[3][96];   // films, anime, Live TV channels
 static int ppN(void) {
 #ifdef NV_ANDROID
   return extplayer_n_apps();
@@ -3349,6 +3355,8 @@ static int ppN(void) {
 #endif
 }
 static int ppBase(int op) { return op == AJ_PLAYER_ANIME ? 1 : 0; }
+static int ppIndice(int op) { return op == AJ_PLAYER_ANIME ? 1 : op == AJ_PLAYER_CANAL ? 2 : 0; }
+static int ppOp(int k) { return k == 1 ? AJ_PLAYER_ANIME : k == 2 ? AJ_PLAYER_CANAL : AJ_PLAYER_EXTERNO; }
 static const char *ppNome(int op, int v) {
   int b = v - ppBase(op);
   if (op == AJ_PLAYER_ANIME && v == 0) return "Igual ao Player";
@@ -3359,18 +3367,18 @@ static const char *ppNome(int op, int v) {
   return "";
 }
 static void ppGravar(void) {
-  char t[2 * 96 + 4];
-  snprintf(t, sizeof t, "%s\n%s\n", ppPkg[0], ppPkg[1]);
+  char t[3 * 96 + 6];
+  snprintf(t, sizeof t, "%s\n%s\n%s\n", ppPkg[0], ppPkg[1], ppPkg[2]);
   dados_gravar("player-externo.txt", t);
 }
 static void ppCarregar(void) {
   char *t = dados_ler("player-externo.txt"), *q;
   int i;
-  ppPkg[0][0] = ppPkg[1][0] = 0;
+  ppPkg[0][0] = ppPkg[1][0] = ppPkg[2][0] = 0;
 #ifdef NV_ANDROID
   extplayer_atualizar_apps();
 #endif
-  for (i = 0, q = t; q && i < 2; i++) {
+  for (i = 0, q = t; q && *q && i < 3; i++) {
     size_t n = strcspn(q, "\r\n");
     if (n < sizeof ppPkg[i]) { memcpy(ppPkg[i], q, n); ppPkg[i][n] = 0; }
     q += n; q += strspn(q, "\r\n");
@@ -3381,8 +3389,8 @@ static void ppCarregar(void) {
 // (app desinstalado) cai em "Perguntar sempre", com log.
 static void ppReconciliar(void) {
   int k, i, mudou = 0;
-  for (k = 0; k < 2; k++) {
-    int op = k ? AJ_PLAYER_ANIME : AJ_PLAYER_EXTERNO, b = ppBase(op), achou = -1;
+  for (k = 0; k < 3; k++) {
+    int op = ppOp(k), b = ppBase(op), achou = -1;
     for (i = 0; ppPkg[k][0] && i < ppN(); i++)
 #ifdef NV_ANDROID
       if (!strcmp(extplayer_app_pkg(i), ppPkg[k])) achou = i;
@@ -3410,6 +3418,17 @@ int ajustes_player_externo(int anime) {
 #endif
 }
 const char *ajustes_player_pacote(int anime) { return ppPkg[anime ? 1 : 0]; }
+// Live TV channels: 0 Built-in, 1 External (system chooser), 2 Ask, 3 the app
+// in ajustes_player_canal_pacote().
+int ajustes_player_canal(void) {
+#ifdef NV_ANDROID
+  int v = valor[AJ_PLAYER_CANAL];
+  return v >= 0 ? (v > 3 ? 3 : v) : 0;
+#else
+  return 0;
+#endif
+}
+const char *ajustes_player_canal_pacote(void) { return ppPkg[2]; }
 int ajustes_buffer_preset(void) {
   int v = valor[AJ_BUFFER];
   return v >= 0 && v < 4 ? v : 0;
@@ -6245,7 +6264,7 @@ static int somenteDesteAparelho(int op) {
     case AJ_LEG_CONTORNO_COR: /* #475: idem */
     case AJ_CACHE_SEEK:     /* F07: o disco e o player sao desta TV */
     case AJ_BUFFER:         /* #338: o buffer e do player desta TV */
-    case AJ_PLAYER_EXTERNO: case AJ_PLAYER_ANIME: /* #501: o app externo e deste aparelho */
+    case AJ_PLAYER_EXTERNO: case AJ_PLAYER_ANIME: case AJ_PLAYER_CANAL: /* #501: o app externo e deste aparelho */
     case AJ_ESTAT_TAMANHO:  /* #338: o painel de estatisticas e desta TV */
     case AJ_ESTAT_LADO:     /* idem: o lado do painel */
     case AJ_FONTE_IDIOMA_AUDIO: /* como a prioridade da fonte: escolha desta TV */
@@ -6298,7 +6317,7 @@ static int soNaTv(int op) {
     case AJ_RETOMADA_MORNA: case AJ_MANTER_PRAZO: case AJ_BUFFER:
     case AJ_INTERFACE_MODO: case AJ_MIC_BUSCA: case AJ_TECLADO_ANDROID:
     case AJ_TUNNELING: case AJ_HDR_INTERFACE: case AJ_HDR_UI: case AJ_LEG_SYNC_AUTO:
-    case AJ_PLAYER_EXTERNO: case AJ_PLAYER_ANIME: case AJ_VIDRO_QUALIDADE:
+    case AJ_PLAYER_EXTERNO: case AJ_PLAYER_ANIME: case AJ_PLAYER_CANAL: case AJ_VIDRO_QUALIDADE:
     case AJ_DET_SO_CINEMETA: case AJ_BUSCA_CINEMETA:
     case AJ_FONTE_MANUAL: case AJ_FONTE_AUTO: case AJ_FONTE_REPOR: case AJ_FONTE_TEXTO: case AJ_FONTE_PRAZO:
     case AJ_ADDONS_PRINCIPAL:
@@ -6850,7 +6869,7 @@ static int foraDestaPlataforma(int op) {
   if (op == AJ_INTERFACE_MODO) return 1;
 #endif
 #ifndef NV_ANDROID
-  if (op == AJ_PLAYER_EXTERNO || op == AJ_PLAYER_ANIME) return 1;   // #501: so ha outro player no Android
+  if (op == AJ_PLAYER_EXTERNO || op == AJ_PLAYER_ANIME || op == AJ_PLAYER_CANAL) return 1;   // #501: so ha outro player no Android
 #endif
   if (op == AJ_RELOGIO_POS) return 1;   // saiu da tela em 7d69643a: a ilha e sempre no canto direito
   // 2.0.3: o Descobrir do web nao existe na TV; "Avancadas" e a pilula do alto
@@ -8227,6 +8246,7 @@ static const char *ajudaOpcaoBase(int op) {
     case AJ_TRAILER_ZOOM_TPK: return "Amplia a imagem do trailer e libera os modos de recorte e zoom da proporção no player; em algumas TVs Samsung pode deixar a tela preta ou mostrar a tela inicial da TV.";
     case AJ_ESTAT_TAMANHO: return "Tamanho com que as Estatísticas ao vivo abrem pela Central de controle. Completo mostra todas as medidas; Compacto, as principais; Mínimo, uma linha fina. Lembrar o último reabre como você deixou. Com o painel aberto, OK troca o tamanho, Esquerda/Direita trocam o lado e Baixo fixa o painel no tamanho escolhido. Vale só nesta TV.";
     case AJ_ESTAT_LADO: return "O lado do player onde as Estatísticas ao vivo ficam, com a mesma margem das listas de Áudio e Legendas. Direita é o padrão. Com o painel aberto, Esquerda/Direita trocam o lado. Vale só nesta TV.";
+    case AJ_PLAYER_CANAL: return "Escolha onde os canais tocam: neste app ou em um player instalado (VLC, MX Player...). A prévia do canal na lista sempre toca neste app.";
     case AJ_PLAYER_EXTERNO: return "Escolha onde o vídeo toca: neste app, em um player instalado (VLC, MX Player...) ou perguntando a cada vez. O player externo não sincroniza o progresso.";
     case AJ_PLAYER_ANIME: return "Player só para anime (kitsu, MAL, AniList, ou animação japonesa). Igual ao Player usa a escolha acima. O player externo não sincroniza o progresso.";
     case AJ_BUFFER: return "Quanto vídeo o app guarda à frente. Automático é o de sempre; 64, 128 ou 256 MB ajudam arquivos 4K pesados e caem sozinhos se faltar memória na TV. No webOS vale para a conversão de DTS e Dolby Vision. Vale a partir do próximo vídeo.";
@@ -9832,8 +9852,8 @@ static int definirValorDireto(int op, int novo) {
   if (op == AJ_ENQUETES) enquete_definir_optout(novo != 0);
   if (op == AJ_ADDONS_PRINCIPAL) sync_iniciar();
   if (op == AJ_SELOS_PACOTE) { selospacote_escolher(novo - 1); spEspelhar(); }
-  if (op == AJ_PLAYER_EXTERNO || op == AJ_PLAYER_ANIME) {
-    int b = novo - ppBase(op) - 3, k = op == AJ_PLAYER_ANIME;
+  if (op == AJ_PLAYER_EXTERNO || op == AJ_PLAYER_ANIME || op == AJ_PLAYER_CANAL) {
+    int b = novo - ppBase(op) - 3, k = ppIndice(op);
     ppPkg[k][0] = 0;
 #ifdef NV_ANDROID
     if (b >= 0 && b < ppN()) snprintf(ppPkg[k], sizeof ppPkg[k], "%s", extplayer_app_pkg(b));
@@ -10437,7 +10457,7 @@ static int nValores(int op) {
   if (op == AJ_LEG_LINGUA || op == AJ_LEG_LINGUA2 || op == AJ_AUD_LINGUA || op == AJ_AUD_LINGUA2) return nLingua > 0 ? nLingua : 1;
   if (op == AJ_TRAILER_AUDIO) return nTrAud > 0 ? nTrAud : 1;
   if (op == AJ_SELOS_PACOTE) return 1 + selospacote_n();
-  if (op == AJ_PLAYER_EXTERNO) return 3 + ppN();
+  if (op == AJ_PLAYER_EXTERNO || op == AJ_PLAYER_CANAL) return 3 + ppN();
   if (op == AJ_PLAYER_ANIME) return 4 + ppN();
   if (op == AJ_URL_LISTA) return 1 + urlN;
   if (op == AJ_IPTV_RES_USO || op == AJ_IPTV_RES_LISTA) {
@@ -10514,7 +10534,7 @@ static const char *textoValor(int op) {
   }
   if (op == AJ_CACHE_SEEK && !cacheSeekExiste()) return "Não disponível nesta TV";
   if (op == AJ_DTS_AC3 && !dtsConversaoExiste()) return "Não disponível nesta TV";
-  if (op == AJ_PLAYER_EXTERNO || op == AJ_PLAYER_ANIME) return ppNome(op, valor[op]);
+  if (op == AJ_PLAYER_EXTERNO || op == AJ_PLAYER_ANIME || op == AJ_PLAYER_CANAL) return ppNome(op, valor[op]);
   if (op == AJ_SELOS_PACOTE) {
     int v = valor[op];
     return v > 0 && v <= selospacote_n() ? selospacote_nome(v - 1) : "Do Nuvio";

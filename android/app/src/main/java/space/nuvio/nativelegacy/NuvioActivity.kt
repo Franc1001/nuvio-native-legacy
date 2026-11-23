@@ -662,9 +662,25 @@ class NuvioActivity : SDLActivity() {
 
     // #501: entrega o stream a outro player; `pacote` vazio = o sistema escolhe.
     // Sem app que aceite, devolve false (o nativo toca no interno). A URL nao vai para o log.
-    fun abrirExterno(url: String, titulo: String, pacote: String): Boolean = try {
+    // `cabs`: "Name: value" lines. MX Player reads "headers" (name, value,
+    // ...); Just Player and other Media3 players read the HTTP_HEADERS bundle;
+    // VLC only takes a User-Agent.
+    fun abrirExterno(url: String, titulo: String, pacote: String, cabs: String): Boolean = try {
         val i = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(url), "video/*")
             .putExtra("title", titulo).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val pares = cabs.lines().mapNotNull { l ->
+            val k = l.indexOf(':')
+            if (k <= 0) null else l.substring(0, k).trim() to l.substring(k + 1).trim()
+        }.filter { it.first.isNotEmpty() }
+        if (pares.isNotEmpty()) {
+            i.putExtra("headers", pares.flatMap { listOf(it.first, it.second) }.toTypedArray())
+            val b = android.os.Bundle()
+            pares.forEach { b.putString(it.first, it.second) }
+            i.putExtra("android.media.intent.extra.HTTP_HEADERS", b)
+            pares.firstOrNull { it.first.equals("User-Agent", true) }?.let {
+                i.putExtra("http-user-agent", it.second)
+            }
+        }
         if (pacote.isNotEmpty()) i.setPackage(pacote)
         startActivity(i)
         true

@@ -51,6 +51,7 @@ jobs:
           bash tests/m3u.sh
           bash tests/stalker_portal.sh
           bash tests/catcanalvazio.sh
+          bash tests/addonslocais.sh
 
       - uses: actions/setup-java@v4
         with:

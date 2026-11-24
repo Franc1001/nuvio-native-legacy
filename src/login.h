@@ -25,4 +25,5 @@ void login_desenhar(Uint32 agora);
 // 1 quando a tela terminou o trabalho dela (ha sessao) e o app deve seguir.
 int  login_concluido(void);
 
+int login_sem_conta(void);  // build without the account server: no login screen
 #endif

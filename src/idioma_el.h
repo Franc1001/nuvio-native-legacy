@@ -3798,6 +3798,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "Το OK προβάλλει  ·  κρατημένο OK = αγαπημένο  ·  ←→ μετακινεί το πλέγμα μπροστά  ·  κρατημένο ↑↓ πηδά ενότητες  ·  Πίσω βγαίνει"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK παρακολούθηση  ·  κράτημα OK = επιλογές  ·  ←→ μετακίνηση οδηγού  ·  ↑ πηγές  ·  Πίσω έξοδος"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK παρακολούθηση  ·  κράτημα OK = επιλογές  ·  ↑ πηγές  ·  κράτημα ↑↓ παράλειψη ενότητας  ·  Πίσω έξοδος"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK παρακολούθηση  ·  \xe2\x86\x90 κατηγορίες  ·  κρατήστε OK = επιλογές  ·  Πίσω έξοδος"),
   T("OK avisa quando começar", "Το OK σε υπενθυμίζει όταν ξεκινά"),
   T("OK começa · Voltar cancela", "OK ξεκινά · Πίσω ακυρώνει"),
   T("OK continua · Voltar fecha", "OK συνεχίζει · Πίσω κλείνει"),

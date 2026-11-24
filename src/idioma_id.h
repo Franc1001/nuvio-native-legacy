@@ -3798,6 +3798,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK menonton  ·  tahan OK = favorit  ·  ←→ menggeser kisi ke depan  ·  tahan ↑↓ melompat antarbagian  ·  Kembali keluar"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK tonton  ·  tahan OK = opsi  ·  ←→ geser panduan  ·  ↑ sumber  ·  Kembali keluar"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK tonton  ·  tahan OK = opsi  ·  ↑ sumber  ·  tahan ↑↓ lompati bagian  ·  Kembali keluar"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK tonton  ·  \xe2\x86\x90 kategori  ·  tahan OK = opsi  ·  Kembali keluar"),
   T("OK avisa quando começar", "OK mengingatkanmu saat dimulai"),
   T("OK começa · Voltar cancela", "OK memulai · Kembali membatalkan"),
   T("OK continua · Voltar fecha", "OK melanjutkan · Kembali menutup"),

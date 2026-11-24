@@ -3798,6 +3798,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK spelar  ·  håll OK = favorit  ·  ←→ flyttar rutnätet framåt  ·  håll ↑↓ hoppar mellan avsnitt  ·  Tillbaka avslutar"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK titta  ·  håll OK = alternativ  ·  ←→ flytta tablån  ·  ↑ källor  ·  Tillbaka avslutar"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK titta  ·  håll OK = alternativ  ·  ↑ källor  ·  håll ↑↓ hoppar avsnitt  ·  Tillbaka avslutar"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK titta  ·  \xe2\x86\x90 kategorier  ·  håll OK = alternativ  ·  Tillbaka avslutar"),
   T("OK avisa quando começar", "OK påminner dig när det börjar"),
   T("OK começa · Voltar cancela", "OK startar · Tillbaka avbryter"),
   T("OK continua · Voltar fecha", "OK fortsätter · Tillbaka stänger"),

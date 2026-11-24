@@ -3798,6 +3798,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK žiūrėti  ·  palaikyti OK = mėgstamiausias  ·  ←→ perkelia tinklelį į priekį  ·  palaikyti ↑↓ peršoka skyrius  ·  Atgal išeina"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK žiūrėti  ·  laikyti OK = parinktys  ·  ←→ slinkti programą  ·  ↑ šaltiniai  ·  Atgal išeina"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK žiūrėti  ·  laikyti OK = parinktys  ·  ↑ šaltiniai  ·  laikyti ↑↓ praleidžia skyrių  ·  Atgal išeina"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK žiūrėti  ·  \xe2\x86\x90 kategorijos  ·  laikykite OK = parinktys  ·  Atgal išeina"),
   T("OK avisa quando começar", "OK primins, kai prasidės"),
   T("OK começa · Voltar cancela", "OK pradeda · Atgal atšaukia"),
   T("OK continua · Voltar fecha", "OK tęsia · Atgal uždaro"),

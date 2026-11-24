@@ -3797,6 +3797,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK — смотреть  ·  удерживайте OK = избранное  ·  ←→ — сдвинуть сетку вперёд  ·  удерживайте ↑↓ — переход между разделами  ·  Назад — выйти"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK смотреть  ·  удерживать OK = опции  ·  ←→ сдвиг программы  ·  ↑ источники  ·  Назад выход"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK смотреть  ·  удерживать OK = опции  ·  ↑ источники  ·  удерживать ↑↓ пропуск раздела  ·  Назад выход"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK смотреть  ·  \xe2\x86\x90 категории  ·  удерживайте OK = параметры  ·  Назад — выход"),
   T("OK avisa quando começar", "OK напомнит, когда начнётся"),
   T("OK começa · Voltar cancela", "OK — начать · Назад — отменить"),
   T("OK continua · Voltar fecha", "OK — продолжить · Назад — закрыть"),

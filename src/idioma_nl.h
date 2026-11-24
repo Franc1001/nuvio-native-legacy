@@ -3798,6 +3798,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK kijkt  ·  OK ingedrukt = favoriet  ·  ←→ schuift het raster vooruit  ·  ↑↓ ingedrukt springt tussen secties  ·  Terug sluit af"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK kijken  ·  OK ingedrukt = opties  ·  ←→ gids verschuiven  ·  ↑ bronnen  ·  Terug sluit"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK kijken  ·  OK ingedrukt = opties  ·  ↑ bronnen  ·  ↑↓ ingedrukt = sectie overslaan  ·  Terug sluit"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK kijken  ·  \xe2\x86\x90 categorieën  ·  OK ingedrukt = opties  ·  Terug sluit af"),
   T("OK avisa quando começar", "OK herinnert je als het begint"),
   T("OK começa · Voltar cancela", "OK start · Terug annuleert"),
   T("OK continua · Voltar fecha", "OK gaat verder · Terug sluit"),

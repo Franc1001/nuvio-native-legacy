@@ -3798,6 +3798,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK megnéz  ·  OK nyomva = kedvenc  ·  ←→ előre mozgatja a rácsot  ·  ↑↓ nyomva = szakaszok közti ugrás  ·  Vissza kilép"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK nézés  ·  OK lenyomva = beállítások  ·  ←→ műsorújság léptetése  ·  ↑ források  ·  Vissza kilép"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK nézés  ·  OK lenyomva = beállítások  ·  ↑ források  ·  ↑↓ lenyomva szakaszt ugrik  ·  Vissza kilép"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK nézd  ·  \xe2\x86\x90 kategóriák  ·  OK nyomva = beállítások  ·  Vissza kilép"),
   T("OK avisa quando começar", "Az OK emlékeztet, amikor elkezdődik"),
   T("OK começa · Voltar cancela", "OK indít · Vissza megszakít"),
   T("OK continua · Voltar fecha", "OK folytat · Vissza bezár"),

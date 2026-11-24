@@ -469,4 +469,9 @@ void login_desenhar(Uint32 agora) {
   }
 }
 
-int login_concluido(void) { return sessao_logada(); }
+// NO-ACCOUNT BUILD: a build without the account server (no NV_SUPABASE_URL /
+// anon key, nuvem_pronta() == 0) can never sign in, so it opens straight into
+// the app with local profiles, local add-ons and local Live TV accounts instead
+// of a login screen that cannot work. Official builds are unchanged.
+int login_sem_conta(void) { return !nuvem_pronta(); }
+int login_concluido(void) { return sessao_logada() || login_sem_conta(); }

@@ -3798,6 +3798,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK 播放  ·  长按 OK = 收藏  ·  ←→ 让节目表往前移  ·  长按 ↑↓ 跳转分区  ·  返回键退出"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK 观看  ·  长按 OK = 选项  ·  ←→ 移动节目单  ·  ↑ 来源  ·  返回退出"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK 观看  ·  长按 OK = 选项  ·  ↑ 来源  ·  长按 ↑↓ 跳过分组  ·  返回退出"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK 观看  ·  \xe2\x86\x90 分类  ·  长按 OK = 选项  ·  返回退出"),
   T("OK avisa quando começar", "按 OK，开始时提醒你"),
   T("OK começa · Voltar cancela", "按 OK 开始 · 按返回键取消"),
   T("OK continua · Voltar fecha", "按 OK 继续 · 按返回键关闭"),

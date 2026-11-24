@@ -3818,14 +3818,20 @@ int app_iniciar(const char *dirArte) {
     printf("[linux] UI preview: no account sync or video playback\n");
   } else
 #endif
-  if (sessao_logada()) {
+  if (login_concluido()) {
     tela = TELA_HOME;
     // Com sessao gravada o ciclo comeca no arranque: e ele que traz os addons
     // e o Trakt da pessoa, sem os quais a home mostra so o que veio no pacote.
     perfilAntes = perfis_ativo();
     perfilAbrirSessao(perfilAntes);
-    arranque_etapa("app_iniciar/sync_iniciar");
-    sync_iniciar();
+    // NO-ACCOUNT BUILD (login.h, login_sem_conta): nothing to sync with.
+    if (sessao_logada()) {
+      arranque_etapa("app_iniciar/sync_iniciar");
+      sync_iniciar();
+    } else {
+      printf("[login] build sem servidor de conta: entrando sem login\n");
+      fflush(stdout);
+    }
     // A ESCOLHA DE PERFIL ABRE AQUI, e nao daqui a alguns segundos.
     //
     // Ela ja aparecia em conta com mais de um perfil, mas so quando o sync
@@ -4960,7 +4966,7 @@ void app_atualizar(float dt, Uint32 agora) {
   // Sessao perdida no meio do uso (renovacao recusada): voltar ao login e a
   // unica saida honesta. Continuar na home mostraria o catalogo de exemplo do
   // pacote como se fosse o da pessoa.
-  if (!sessao_logada()
+  if (!login_concluido()
 #ifdef NV_LINUX_DESKTOP
       && !uiPreview
 #endif
@@ -6921,7 +6927,7 @@ void app_atualizar(float dt, Uint32 agora) {
   avisos_atualizar(dt, agora);
   // Lembretes de programa: so com alguem dentro do app (nao no login nem na
   // escolha de perfil), uma conferencia por segundo no maximo.
-  if (sessao_logada() && tela != TELA_LOGIN && tela != TELA_ESCOLHA_PERFIL) {
+  if (login_concluido() && tela != TELA_LOGIN && tela != TELA_ESCOLHA_PERFIL) {
     char lid[80], lnome[120], lbase[600];
     CatItem it;
     glem_passo(dt, agora);
@@ -7416,7 +7422,7 @@ void app_desenhar(Uint32 agora) {
   // no primeiro quadro em que ele pode ser visto (ver avisos.c).
   // (perfilsel_concluido NAO serve de guarda: "Voltar: continuar como X" sai
   // da escolha com `sair`, nunca com `concluido`, e a central ficaria muda.)
-  if (!registro_aberto() && !player_aberto() && sessao_logada() &&
+  if (!registro_aberto() && !player_aberto() && login_concluido() &&
       tela != TELA_LOGIN && tela != TELA_ESCOLHA_PERFIL)
     avisos_desenhar(agora);
   // A ILHA DO RELOGIO (ilha.h): mesmas guardas da central — com a pessoa
@@ -7463,7 +7469,7 @@ void app_desenhar(Uint32 agora) {
     } else ilha_atividade_detalhes(NULL, NULL);
   } else ilha_atividade_detalhes(NULL, NULL);
   if (guia_atualizando_lista()) ilha_atividade(i18n("Atualizando a lista de canais…"), -1.0f);
-  if (!registro_aberto() && !player_aberto() && sessao_logada() &&
+  if (!registro_aberto() && !player_aberto() && login_concluido() &&
       tela != TELA_LOGIN && tela != TELA_ESCOLHA_PERFIL) {
     ilha_relogio_visivel(relogioCabe() && ajustes_relogio_ligado());
     ilha_posicionar(1);
@@ -7482,7 +7488,7 @@ void app_desenhar(Uint32 agora) {
   }
   // O cartao do lembrete fica acima do player e da tela: e um aviso com hora.
   CAMADA_SE(glem_cartao_aberto());
-  if (!registro_aberto() && sessao_logada() && tela != TELA_LOGIN &&
+  if (!registro_aberto() && login_concluido() && tela != TELA_LOGIN &&
       tela != TELA_ESCOLHA_PERFIL)
     glem_desenhar(agora);
   CAMADA_SE(recenviar_aberto());

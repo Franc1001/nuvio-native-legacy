@@ -411,6 +411,7 @@ static void servidorFuncionou(int k, const char *srv, NvPerfilSessao sessao) {
 // goes to the next address of the account. The one that answers becomes the
 // server in use. Account answers (wrong password, screens full, 429) never
 // switch: every address of the provider would say the same.
+static int authZero(const char *corpo);
 static char *chamarSt(const char *acao, int prazo, int *status, NvPerfilSessao sessao) {
   char srv[IPTVRES_MAX + 1][256], u[300], s[300], url[1100];
   int idx[IPTVRES_MAX + 1], n, i;
@@ -437,6 +438,15 @@ static char *chamarSt(const char *acao, int prazo, int *status, NvPerfilSessao s
     memset(url, 0, sizeof url);
     if (st < 0) return NULL;
     html = classificar(r) == XC_HTML;
+    // A BACKUP that refuses the username/password is not this account's
+    // server (or no longer is): try the others, the main one included. This is
+    // what brings an account back after it moved to a bad backup.
+    if (i + 1 < n && idx[i] > 0 && (st == 401 || (st >= 200 && st < 300 && authZero(r)))) {
+      printf("[xtream] servidor de reserva %d recusou o login: tentando o proximo\n", idx[i]);
+      fflush(stdout);
+      free(r);
+      continue;
+    }
     if (i + 1 < n && iptvres_falhou(st, html)) {
       // Index only: addresses and credentials never go to the log.
       printf("[xtream] servidor %d de %d falhou (HTTP %d%s): tentando o proximo\n",
@@ -445,7 +455,8 @@ static char *chamarSt(const char *acao, int prazo, int *status, NvPerfilSessao s
       free(r);
       continue;
     }
-    if (i > 0 && !iptvres_falhou(st, html)) servidorFuncionou(idx[i], srv[i], sessao);
+    if (i > 0 && !iptvres_falhou(st, html) && st != 401 && !(st >= 200 && st < 300 && authZero(r)))
+      servidorFuncionou(idx[i], srv[i], sessao);
     if (status) *status = st;
     return r;
   }
@@ -1027,6 +1038,7 @@ int xtream_url(const char *id, char *url, unsigned n) {
 }
 
 void xtream_fonte_selecionar(unsigned id) { atomic_store(&contaEditada, id); }
+unsigned xtream_fonte_selecionada(void) { return atomic_load(&contaEditada); }
 int xtream_fonte_configurado(unsigned id) {
   unsigned a = usarFonte(id); int r = xtream_configurado(); usarFonte(a); return r;
 }

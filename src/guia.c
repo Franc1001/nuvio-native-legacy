@@ -4383,9 +4383,6 @@ void guia_evento(const SDL_Event *e) {
   // O painel de categorias captura as setas e o OK enquanto aberto.
   if (catAberto) {
     catUlt = agora;
-    if (k == SDLK_UP && gVidro() && catAberto == 2 && catFoco == 0 && !e->key.repeat) {
-      catFechar(); focoTopo = 1; focoFontes = 0; topoCol = G_TOPO_BUSCAR; return;
-    }
     if (k == SDLK_UP || k == SDLK_DOWN) {
       int dir = k == SDLK_DOWN ? 1 : -1;
       if (catAberto == 1) {
@@ -4451,16 +4448,6 @@ void guia_evento(const SDL_Event *e) {
   if (k == SDLK_UP || k == SDLK_DOWN) {
     int dir = (k == SDLK_DOWN) ? 1 : -1;
     int fresco = !e->key.repeat && !(dirSeg == k && agora - dirTick < G_REP_MS);
-    // GLASS LIST: Up/Down stay inside the open category and wrap around at
-    // its ends (a fresh press wraps; holding stops at the edge).
-    if (gVidro()) {
-      int n = linhaN(focoLin);
-      dirSeg = k; dirTick = agora;
-      if (n < 1) return;
-      if (dir > 0) { if (focoCol + 1 < n) focoCol++; else if (fresco) focoCol = 0; }
-      else         { if (focoCol > 0) focoCol--; else if (fresco) focoCol = n - 1; }
-      return;
-    }
     // Only a fresh Up at the first channel may leave the channel list.
     if (dir < 0 && fresco && focoLin == 0 && (!modoLista || focoCol == 0)) {
       focoTopo = 1; focoFontes = 0;
@@ -4850,13 +4837,11 @@ static void epgPasso(void) {
 // impedem a conta fechada que o modo cartoes usa.
 static float listaYDe(int l, int c) {
   float y = 0.0f;
-  if (gVidro()) return G_L_HEAD + (float)c * G_L_ROW;   // only the open category is on screen
   for (int i = 0; i < l; i++) y += G_L_HEAD + (float)linhaN(i) * G_L_ROW;
   return y + G_L_HEAD + (float)c * G_L_ROW;
 }
 static float listaAltura(void) {
   float y = 0.0f;
-  if (gVidro()) return G_L_HEAD + (float)linhaN(focoLin) * G_L_ROW;
   for (int i = 0; i < nLinhas(); i++) y += G_L_HEAD + (float)linhaN(i) * G_L_ROW;
   return y;
 }
@@ -7692,13 +7677,7 @@ static void toqueGuiaRetomar(void) {
     }
     toquerol_limpar(&toqueAddon); return;
   }
-  if (toquerol_livre(&toqueLista) && nLinhas() > 0 && gVidro()) {
-    float ponto = rolL + toqueLista.regiao.h * 0.35f;
-    focoCol = (int)((ponto - G_L_HEAD) / G_L_ROW);
-    if (focoCol >= linhaN(focoLin)) focoCol = linhaN(focoLin) - 1;
-    if (focoCol < 0) focoCol = 0;
-    focoTopo = 0;
-  } else if (toquerol_livre(&toqueLista) && nLinhas() > 0) {
+  if (toquerol_livre(&toqueLista) && nLinhas() > 0) {
     float ponto = rolL + toqueLista.regiao.h * 0.35f, y = 0.0f;
     for (int l = 0; l < nLinhas(); l++) {
       float h = G_L_HEAD + linhaN(l) * G_L_ROW;
@@ -7782,10 +7761,21 @@ static int vpServidores(IptvReservas *r, int *tipo) {
   char principal[16];
   if (!c || c->fonte < 0 || c->fonte >= nLtvF || !fonteConta(&ltvF[c->fonte], &id)) return 0;
   *tipo = ltvF[c->fonte].tipo;
-  if (*tipo == LTV_XTREAM) { xtream_fonte_selecionar(id); return xtream_reservas_ler(r, principal, sizeof principal) && r->n > 0; }
-  if (*tipo == LTV_M3U) { m3u_fonte_selecionar(id); return m3u_reservas_ler(r, principal, sizeof principal) && r->n > 0; }
-  if (*tipo == LTV_STALKER) { stalker_fonte_selecionar(id); return stalker_reservas_ler(r, principal, sizeof principal) && r->n > 0; }
+  // Read THIS account's servers, then put back the account Settings had
+  // selected: the backends use that selection elsewhere.
+  if (*tipo == LTV_XTREAM) { unsigned ant = xtream_fonte_selecionada(); int ok; xtream_fonte_selecionar(id);
+    ok = xtream_reservas_ler(r, principal, sizeof principal) && r->n > 0; xtream_fonte_selecionar(ant); return ok; }
+  if (*tipo == LTV_M3U) { unsigned ant = m3u_fonte_selecionada(); int ok; m3u_fonte_selecionar(id);
+    ok = m3u_reservas_ler(r, principal, sizeof principal) && r->n > 0; m3u_fonte_selecionar(ant); return ok; }
+  if (*tipo == LTV_STALKER) { unsigned ant = stalker_fonte_selecionada(); int ok; stalker_fonte_selecionar(id);
+    ok = stalker_reservas_ler(r, principal, sizeof principal) && r->n > 0; stalker_fonte_selecionar(ant); return ok; }
   return 0;
+}
+static unsigned vpContaId(void) {
+  GCanal *c = linhaItem(focoLin, focoCol);
+  unsigned id = 0;
+  if (c && c->fonte >= 0 && c->fonte < nLtvF) fonteConta(&ltvF[c->fonte], &id);
+  return id;
 }
 static int vpItens(int *it) {
   int n = 0, tipo;
@@ -7851,9 +7841,10 @@ static void vpAgir(int item, int dir) {
       char nome[48];
       if (!vpServidores(&r, &tipo)) break;
       k = (r.ativo + (dir < 0 ? r.n : 1)) % (r.n + 1);
-      if (tipo == LTV_XTREAM) ok = xtream_reservas_mudar(vpUsar, &k);
-      else if (tipo == LTV_M3U) ok = m3u_reservas_mudar(vpUsar, &k);
-      else if (tipo == LTV_STALKER) ok = stalker_reservas_mudar(vpUsar, &k);
+      { unsigned id = vpContaId(), ant;
+        if (tipo == LTV_XTREAM) { ant = xtream_fonte_selecionada(); xtream_fonte_selecionar(id); ok = xtream_reservas_mudar(vpUsar, &k); xtream_fonte_selecionar(ant); }
+        else if (tipo == LTV_M3U) { ant = m3u_fonte_selecionada(); m3u_fonte_selecionar(id); ok = m3u_reservas_mudar(vpUsar, &k); m3u_fonte_selecionar(ant); }
+        else if (tipo == LTV_STALKER) { ant = stalker_fonte_selecionada(); stalker_fonte_selecionar(id); ok = stalker_reservas_mudar(vpUsar, &k); stalker_fonte_selecionar(ant); } }
       if (ok) { r.ativo = k; vpServidorNome(&r, nome, sizeof nome); vpNota(nome); guia_recarregar(0); }
       break; }
     case VP_ATUALIZAR:
@@ -8097,7 +8088,6 @@ void guia_desenhar(Uint32 agora) {
         int n = linhaN(l);
         float dim = 1.0f;
         float bloco = G_L_HEAD + (float)n * G_L_ROW;
-        if (gVidro() && l != focoLin) continue;   // GLASS LIST: only the open category
         if (y > G_L_BASE) break;
         if (y + bloco < G_L_TOPO - 8.0f) { y += bloco; continue; }
         // Cabecalho de categoria DISCRETO: 22 px em cinza. A categoria e
@@ -8106,8 +8096,7 @@ void guia_desenhar(Uint32 agora) {
           char cab[140];
           int at = 0;
           TxtLinha t;
-          if (gVidro()) snprintf(cab, sizeof cab, "%s  \xc2\xb7  %d / %d", linhaNome(l), focoCol + 1, n);
-          else snprintf(cab, sizeof cab, "%s  \xc2\xb7  %d", linhaNome(l), n);
+          snprintf(cab, sizeof cab, "%s  \xc2\xb7  %d", linhaNome(l), n);
           t = txt_linha_corta(TXT_PG_ROTULO, cab, at ? 255 : 150, at ? 255 : 153,
                               at ? 255 : 162, 255, gVidro() ? G_V_LISTA_W : G_L_COL);
           txt_desenhar_alpha(t, G_AREA_X + 4.0f, y + G_L_HEAD - 12.0f - (float)t.h, a * dim);
@@ -8122,7 +8111,7 @@ void guia_desenhar(Uint32 agora) {
                                 G_L_TOPO - 8.0f, G_L_BASE, ponteiroCanal, NULL, l, i);
           if (gVidro()) {
             // Rows fade with their distance from the focused one, like tvOS.
-            int d = l == focoLin ? abs(i - focoCol) : 6;
+            int d = l == focoLin ? abs(i - focoCol) : 4;
             float dimV = foc ? 1.0f : fmaxf(0.38f, 0.82f - 0.11f * (float)d);
             if (passo == 0 && foc) {
               float s = 5.0f;

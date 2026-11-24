@@ -41,7 +41,7 @@ static int ultimoPost;
 static char *responder(const char *url);
 // Backup servers: a request to a host listed here gets no answer (status 0),
 // and to `hostPagina` an HTTP 200 block page.
-static char hostMorto[2][64], hostPagina[64];
+static char hostMorto[2][64], hostPagina[64], hostRecusa[64];
 static int pedidos;
 static int morto(const char *url) {
   for (int i = 0; i < 2; i++) if (hostMorto[i][0] && strstr(url, hostMorto[i])) return 1;
@@ -106,7 +106,7 @@ static char *responder(const char *url) {
   (void)url;
   if (mudo) return NULL;
   if (pagina) return strdup("<!DOCTYPE html><html><title>Just a moment...</title>[x]</html>");
-  if (recusar) return strdup(respAuth0);
+  if (recusar || (hostRecusa[0] && strstr(ultimaUrl, hostRecusa))) return strdup(respAuth0);
   if (strstr(ultimaUrl, "action=get_live_categories")) return strdup(respCats);
   if (strstr(ultimaUrl, "action=get_live_streams")) return strdup(respStreams);
   if (strstr(ultimaUrl, "action=get_short_epg")) return strdup(respEpg);
@@ -226,6 +226,15 @@ static void backupServers(void) {
     assert(xtream_canais(c, 16) == 0 && xtream_ultima_falha() == XT_RECUSOU);
     recusar = 0; respAuth0 = antes; }
   puts("ok  recusa com JSON formatado (\"auth\": 0) tambem e recusa");
+
+  // A BACKUP in use that refuses the login (another provider, or the account
+  // left it): the main server is tried and becomes the server in use again.
+  k = 1; assert(xtream_reservas_mudar(setActive, &k));
+  snprintf(hostRecusa, sizeof hostRecusa, "b1.tv");
+  assert(xtream_canais(c, 16) == 3 && strstr(ultimaUrl, "://main.tv:8080/"));
+  assert(xtream_reservas_ler(&r, NULL, 0) && r.ativo == 0);
+  hostRecusa[0] = 0;
+  puts("ok  reservas: reserva que recusa o login volta ao principal");
 
   // Manual mode: only the chosen server, even when it is down.
   assert(xtream_reservas_mudar(setAuto, &zero));

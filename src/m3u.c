@@ -306,6 +306,7 @@ static int cabecalhos(const char *id,char *out,unsigned n) {
 void m3u_recarregar(void){pthread_mutex_lock(&trava);carregar();carregada=0;renovarCache=1;pthread_mutex_unlock(&trava);}
 
 void m3u_fonte_selecionar(unsigned id){atomic_store(&contaEditada,id);}
+unsigned m3u_fonte_selecionada(void){return atomic_load(&contaEditada);}
 int m3u_fonte_configurado(unsigned id){unsigned a=usarFonte(id);int r=m3u_configurado();usarFonte(a);return r;}
 int m3u_fonte_canais(unsigned id,M3uCanal *out,int max,uint64_t sessao){
   unsigned a=usarFonte(id);int n=m3u_canais_sessao(out,max,sessao);

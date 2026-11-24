@@ -152,6 +152,7 @@ int xtream_epg_parse(const char *json, XtreamProg *out, int cap);
 int xtream_url_xmltv(char *url, unsigned n);
 
 void xtream_fonte_selecionar(unsigned id);
+unsigned xtream_fonte_selecionada(void);   // to restore after a one-off read
 int xtream_fonte_configurado(unsigned id);
 int xtream_fonte_canais(unsigned id, XtreamCanal *out, int max, uint64_t sessao);
 int xtream_fonte_canais_cb(unsigned id, void (*cat)(const char *, int, int, void *),

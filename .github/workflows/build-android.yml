@@ -48,6 +48,7 @@ jobs:
         run: |
           bash tests/xtream.sh
           bash tests/m3u.sh
+          bash tests/catcanalvazio.sh
 
       - uses: actions/setup-java@v4
         with:

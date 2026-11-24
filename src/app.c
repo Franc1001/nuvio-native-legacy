@@ -3525,6 +3525,9 @@ static void tentarProximaFonteVOD(void) {
 // em toda troca de canal; o "0" e o botao do OSD voltam a ele (e trocam de lugar).
 static char ultCanalId[80], ultCanalNome[140], ultCanalBase[600];
 static char atualCanalBase[600];
+static int canalIptv(const char *id) {
+  return id && id[0] && (xtream_e_id(id) || guia_e_m3u(id) || stalker_e_id(id) || m3u_e_id(id));
+}
 static void tocarCanal(const CatItem *it) {
   int ni;
   if (!it || !it->imdb[0]) return;
@@ -3535,8 +3538,12 @@ static void tocarCanal(const CatItem *it) {
   }
   snprintf(atualCanalBase, sizeof atualCanalBase, "%s", guia_canal_origem());
   ni = cat_indice_por_imdb(it->imdb);
-  if (ni < 0) ni = cat_acrescentar(it);
-  if (ni < 0) return;
+  if (ni < 0) ni = cat_acrescentar_canal(it);
+  if (ni < 0) {
+    printf("[livetv] canal %s nao entrou no catalogo; nao abriu\n", it->imdb); fflush(stdout);
+    return;
+  }
+  printf("[livetv] abrindo canal %s (%s)\n", it->imdb, it->titulo); fflush(stdout);
   limparFonteVOD();
   if (player_aberto() || player_retido()) player_encerrar();
   diagnostico_cancelar_vazao();
@@ -5991,8 +5998,10 @@ void app_atualizar(float dt, Uint32 agora) {
   // duas ficariam presas no mesmo pipeline.
   // A busca disparada por Reproduzir terminou: agora VERIFICA as fontes, em
   // ordem, ate achar uma que leve ao arquivo — e so entao liga o video.
+  // IPTV channels (Xtream, M3U, Stalker) never come from an add-on: they do
+  // not wait for an add-on search that is still running.
   if (aguardandoFonte == 1 &&
-      (addons_estado() != ADD_BUSCANDO ||
+      (canalIptv(player_id_canal()) || addons_estado() != ADD_BUSCANDO ||
        ((player_id_canal()[0] || !fontefalha_ativa()) && autoParcialPronto()))) {
     unsigned geracao = novaGeracaoFonte();
     // QUANTO O PLAY ESPEROU PELA DECISAO, e por que ela saiu (#202). Medido no

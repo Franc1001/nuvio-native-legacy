@@ -2399,18 +2399,18 @@ int cat_mesclar_listas(const CatItem *v, int qtd) {
   return novos;
 }
 
-int cat_acrescentar(const CatItem *item) {
+static int acrescentar(const CatItem *item, int vazioOk) {
   CatItem *novo;
   int novoN;
   if (!item) return -1;
   // Mesma regra de cat_acrescentar_lote: `n` so com a trava.
   CAT_TESTE_ANTES_TRAVA();
   catTravar();
-  if (n < 1 || n >= CAT_MAX) { pthread_mutex_unlock(&pubTrava); return -1; }
+  if ((n < 1 && !vazioOk) || n < 0 || n >= CAT_MAX) { pthread_mutex_unlock(&pubTrava); return -1; }
   novoN = n + 1;
   novo = malloc(sizeof(CatItem) * (size_t)novoN);
   if (!novo) { pthread_mutex_unlock(&pubTrava); return -1; }
-  memcpy(novo, itens, sizeof(CatItem) * (size_t)n);
+  if (n > 0) memcpy(novo, itens, sizeof(CatItem) * (size_t)n);
   memcpy(&novo[n], item, sizeof(CatItem));
   aposentar(itens);
   __atomic_store_n(&itens, novo, __ATOMIC_RELEASE);
@@ -2425,6 +2425,11 @@ int cat_acrescentar(const CatItem *item) {
   pthread_mutex_unlock(&pubTrava);
   return novoN - 1;
 }
+int cat_acrescentar(const CatItem *item) { return acrescentar(item, 0); }
+// A Live TV channel must open even when the catalog is EMPTY: a build with no
+// account and no add-ons has no titles at all, only IPTV channels, and
+// cat_acrescentar refused (n < 1), so pressing a channel did nothing.
+int cat_acrescentar_canal(const CatItem *item) { return acrescentar(item, 1); }
 
 void cat_definir(const CatItem *lista, int qtd) {
   cat_definir_tudo(lista, qtd, NULL, 0);

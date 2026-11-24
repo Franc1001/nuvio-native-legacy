@@ -325,6 +325,7 @@ int cat_indice_vivo(int indice, const char *imdb);
 // de fora do catalogo (filmografia de ator, "Mais como este"). Ver a nota sobre
 // a troca de bloco em catalogo.c.
 int cat_acrescentar(const CatItem *item);
+int cat_acrescentar_canal(const CatItem *item);   // also into an EMPTY catalog (Live TV, no add-ons)
 
 // Acrescenta `qtd` itens numa UNICA troca de bloco e escreve os indices em
 // `saidaIdx` (pode ser NULL). Devolve quantos entraram.

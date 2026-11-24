@@ -1,0 +1,18 @@
+name: Check IPTV server
+on: push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: DNS lookup
+        run: getent hosts line.tivi-ott.net
+      - name: Server answers on port 80
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 http://line.tivi-ott.net/player_api.php || echo 000)
+          echo "HTTP $code"
+          test "$code" != "000"
+      - name: Server answers on port 8080
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 http://line.tivi-ott.net:8080/player_api.php || echo 000)
+          echo "HTTP $code"
+          test "$code" != "000"

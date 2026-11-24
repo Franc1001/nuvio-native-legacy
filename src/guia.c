@@ -842,6 +842,25 @@ static void favAlternar(GCanal *c) {
 static int modoLista, modoLido;
 static int overlay;
 static int gVidro(void) { return NV_GUIA_SO_CANAIS && modoLista && !overlay && !gRetrato(); }
+// LIVE TV THEMES (Settings > Live TV > Theme, ajustes_ltv_tema) for the glass
+// list: page colour, the focused row's pill and its text. Ambient takes the
+// page colour from the focused channel's logo (gTemaAmbiente), eased.
+typedef struct { float fr, fg, fb, pr, pg, pb; int tr, tg, tb; } GTema;
+static const GTema G_TEMAS[5] = {
+  { -1, -1, -1,          0.960f, 0.955f, 0.955f,  22,  22,  26 },   // Ambient
+  { -1, -1, -1,          0.945f, 0.945f, 0.955f,  22,  22,  26 },   // Graphite
+  { 0.043f, 0.078f, 0.149f, 0.357f, 0.549f, 1.000f, 255, 255, 255 }, // Midnight blue
+  { 0.090f, 0.071f, 0.051f, 0.949f, 0.769f, 0.427f,  42,  29,   8 }, // Warm cinema
+  { 0.039f, 0.082f, 0.071f, 0.373f, 0.878f, 0.690f,   6,  40,  29 }, // Emerald
+};
+static float gFundo[3]; static int gFundoOk;   // eased page colour; seeded on first use
+static const GTema *gTema(void) { return &G_TEMAS[gVidro() ? ajustes_ltv_tema() : 1]; }
+// Page colour of this frame (theme, or the eased ambient one).
+static void gCorFundo(float *r, float *g, float *b) {
+  if (!gVidro()) { *r = NV_COR_FUNDO_R; *g = NV_COR_FUNDO_G; *b = NV_COR_FUNDO_B; return; }
+  if (!gFundoOk) { *r = NV_COR_FUNDO_R; *g = NV_COR_FUNDO_G; *b = NV_COR_FUNDO_B; return; }
+  *r = gFundo[0]; *g = gFundo[1]; *b = gFundo[2];
+}
 
 static void modoLer(void) {
   char *t = lerPerfil("modo");
@@ -5470,7 +5489,9 @@ static void desenharHero(float a, time_t agoraT, time_t tFoco) {
     // encolhendo: nada aqui, o furo do degrau vem por cima de tudo
   } else {
     if (gRetrato()) gfx_vidro_ou_solido(pv, raio, GFX_VIDRO_DENS, a, 0.078f, 0.080f, 0.088f, 1.0f);
-    else gfx_cor(pv, gVidro() ? raio : 0, 0.078f, 0.080f, 0.088f, a);
+    else if (gVidro()) { float fr, fg, fb; gCorFundo(&fr, &fg, &fb);
+                         gfx_cor(pv, raio, fr + 0.045f, fg + 0.045f, fb + 0.05f, a); }
+    else gfx_cor(pv, 0, 0.078f, 0.080f, 0.088f, a);
     // Uma luz so, bem fraca, na cor de realce: tira a cara de caixa vazia.
     if (!ajustes_vidro() && !gVidro()) gfx_luz_canto(pv, raio, pv.w * 0.82f, -pv.h * 0.2f, pv.w * 0.85f,
                   ar, ag, ab, 0.10f * a);
@@ -6535,7 +6556,8 @@ static void desenharLinhaLista(GCanal *c, float y, int focada, float a,
       return;
     }
     { char num[16];
-      int cn = focada ? 92 : 132, ct = focada ? 22 : 236;
+      const GTema *tm = gTema();
+      int cn = focada ? (tm->tr > 128 ? 225 : 92) : 132, ct = focada ? tm->tr : 236;
       TxtLinha n, t;
       float nx;
       snprintf(num, sizeof num, "%d", c->numero);
@@ -6543,7 +6565,7 @@ static void desenharLinhaLista(GCanal *c, float y, int focada, float a,
       txt_desenhar_alpha(n, lx + 44.0f - (float)n.w, y + (h - (float)n.h) * 0.5f, a);
       logoNaCaixa(c, (GfxRect){ cx.x + 4.0f, cx.y + 4.0f, cx.w - 8.0f, cx.h - 8.0f }, 72.0f, 38.0f, G_LOGO_CLARO, a);
       nx = cx.x + cx.w + 22.0f;
-      t = txt_linha_corta(TXT_CW_TITULO, c->nome, ct, ct, ct + (focada ? 4 : 2), 255,
+      t = txt_linha_corta(TXT_CW_TITULO, c->nome, ct, focada ? tm->tg : ct, focada ? tm->tb : ct + 2, 255,
                           G_AREA_X + wl - nx - (c->fav ? 40.0f : 0.0f) - (focada ? 44.0f : 8.0f));
       txt_desenhar_alpha(t, nx, y + (h - (float)t.h) * 0.5f, a);
       if (c->fav) {
@@ -6551,7 +6573,8 @@ static void desenharLinhaLista(GCanal *c, float y, int focada, float a,
         txt_desenhar_alpha(st, G_AREA_X + wl - (focada ? 60.0f : 18.0f) - (float)st.w, y + (h - (float)st.h) * 0.5f, a);
       }
       if (focada)
-        gfx_icone((GfxRect){ G_AREA_X + wl - 42.0f, y + (h - 26.0f) * 0.5f, 26.0f, 26.0f }, "play", 0.10f, 0.10f, 0.12f, a);
+        gfx_icone((GfxRect){ G_AREA_X + wl - 42.0f, y + (h - 26.0f) * 0.5f, 26.0f, 26.0f }, "play",
+                  tm->tr / 255.0f, tm->tg / 255.0f, tm->tb / 255.0f, a);
     }
     (void)agoraT; (void)ini; (void)tFoco; (void)agoraX;
     return;
@@ -7596,6 +7619,39 @@ static void toqueGuiaRetomar(void) {
 }
 #endif
 
+// AMBIENT: the logo's most saturated colour (16x16 averages from the decode,
+// weighted by saturation), darkened so white text keeps its contrast. Grey or
+// not yet loaded logos give the plain page colour.
+static void gTemaAmbiente(const GCanal *c, float out[3]) {
+  static unsigned char px[16 * 16 * 4];
+  float sr = 0, sg = 0, sb = 0, sw = 0;
+  const char *lg = c ? logoDe(c) : NULL;
+  out[0] = NV_COR_FUNDO_R; out[1] = NV_COR_FUNDO_G; out[2] = NV_COR_FUNDO_B;
+  if (!lg || !lg[0] || !tex_cores(lg, px)) return;
+  for (int i = 0; i < 256; i++) {
+    float r = px[i * 4] / 255.0f, g = px[i * 4 + 1] / 255.0f, b = px[i * 4 + 2] / 255.0f;
+    float mx = fmaxf(r, fmaxf(g, b)), mn = fminf(r, fminf(g, b)), sat = mx > 0.0f ? (mx - mn) / mx : 0.0f;
+    float w;
+    if (px[i * 4 + 3] < 128 || mx < 0.12f || sat < 0.25f) continue;
+    w = sat * sat * mx;
+    sr += r * w; sg += g * w; sb += b * w; sw += w;
+  }
+  if (sw < 2.0f) return;
+  sr /= sw; sg /= sw; sb /= sw;
+  { float mx = fmaxf(sr, fmaxf(sg, sb)), k = 0.30f / (mx > 0.01f ? mx : 1.0f);
+    out[0] = 0.035f + sr * k * 0.75f; out[1] = 0.035f + sg * k * 0.75f; out[2] = 0.040f + sb * k * 0.75f; }
+}
+static void gTemaPasso(void) {
+  float alvo[3];
+  int t = ajustes_ltv_tema();
+  if (!gVidro()) return;
+  if (!gFundoOk) { gFundo[0] = NV_COR_FUNDO_R; gFundo[1] = NV_COR_FUNDO_G; gFundo[2] = NV_COR_FUNDO_B; gFundoOk = 1; }
+  if (t == 0) gTemaAmbiente(linhaItem(focoLin, focoCol), alvo);
+  else if (G_TEMAS[t].fr < 0) { alvo[0] = NV_COR_FUNDO_R; alvo[1] = NV_COR_FUNDO_G; alvo[2] = NV_COR_FUNDO_B; }
+  else { alvo[0] = G_TEMAS[t].fr; alvo[1] = G_TEMAS[t].fg; alvo[2] = G_TEMAS[t].fb; }
+  for (int k = 0; k < 3; k++) gFundo[k] += (alvo[k] - gFundo[k]) * 0.07f;
+}
+
 void guia_desenhar(Uint32 agora) {
 #ifdef NV_TOUCH_UI
   if (!telefoneui_ativo()) toqueLimpar();
@@ -7628,8 +7684,10 @@ void guia_desenhar(Uint32 agora) {
   // Full guide owns every background pixel, including during entry/exit.
   // Only the validated channel video hole can reveal the native plane.
   { GfxRect tela = { 0, 0, NV_TELA_W, NV_TELA_H };
-    gfx_cor(tela, 0.0f, NV_COR_FUNDO_R, NV_COR_FUNDO_G, NV_COR_FUNDO_B,
-            1.0f); }
+    float fr, fg, fb;
+    if (temLinhas) gTemaPasso();
+    gCorFundo(&fr, &fg, &fb);
+    gfx_cor(tela, 0.0f, fr, fg, fb, 1.0f); }
 
   // Open the native video hole before drawing header text over the hero.
   if (temLinhas) desenharHero(a, agoraT, tFoco);
@@ -7745,7 +7803,7 @@ void guia_desenhar(Uint32 agora) {
             if (passo == 0 && foc) {
               float s = 5.0f;
               GfxRect pill = { G_AREA_X - 8.0f - s, y - 2.0f - s, G_V_LISTA_W + 16.0f + 2.0f * s, G_L_CEL + 4.0f + 2.0f * s };
-              gfx_cor(pill, 18.0f / pill.h, 0.945f, 0.945f, 0.955f, a);
+              gfx_cor(pill, 18.0f / pill.h, gTema()->pr, gTema()->pg, gTema()->pb, a);
             }
             desenharLinhaLista(linhaItem(l, i), y, foc, a * dimV, agoraT, ini, tFoco,
                                passo, agoraX, foc ? &alvo : NULL);
@@ -7778,8 +7836,9 @@ void guia_desenhar(Uint32 agora) {
     (void)agora;
     // Dither the scroll boundary into the page, without stacked alpha strips.
     if (maisAcima)
+      { float fr, fg, fb; gCorFundo(&fr, &fg, &fb);
       gfx_rect((GfxRect){0, G_L_TOPO - 8.0f, gVidro() ? G_AREA_X + G_V_LISTA_W + 24.0f : NV_TELA_W, G_L_FADE}, 0, GFX_VEU_CSS, 0, 1, 1, 0,
-               NV_COR_FUNDO_R, NV_COR_FUNDO_G, NV_COR_FUNDO_B, a);
+               fr, fg, fb, a); }
     gfx_sem_recorte();
     // A cabeca da linha "agora": a hora numa pilula na regua.
     if (agoraVis) {
@@ -7890,12 +7949,11 @@ void guia_desenhar(Uint32 agora) {
   }
 
   if (temLinhas && !gRetrato()) {
-    gfx_rect((GfxRect){0, G_L_TOPO, 40, NV_TELA_H - G_L_TOPO}, 0, GFX_VEU_CSS, 0, 2, 1, 0,
-             NV_COR_FUNDO_R, NV_COR_FUNDO_G, NV_COR_FUNDO_B, a);
-    gfx_rect((GfxRect){NV_TELA_W - 40, G_L_TOPO, 40, NV_TELA_H - G_L_TOPO}, 0, GFX_VEU_CSS, 0, 3, 1, 0,
-             NV_COR_FUNDO_R, NV_COR_FUNDO_G, NV_COR_FUNDO_B, a);
-    gfx_rect((GfxRect){0, NV_TELA_H - 110, NV_TELA_W, 110}, 0, GFX_VEU_CSS, 0, 0, 1, 0,
-             NV_COR_FUNDO_R, NV_COR_FUNDO_G, NV_COR_FUNDO_B, a);
+    float fr, fg, fb;
+    gCorFundo(&fr, &fg, &fb);   // the theme's page colour in the glass list
+    gfx_rect((GfxRect){0, G_L_TOPO, 40, NV_TELA_H - G_L_TOPO}, 0, GFX_VEU_CSS, 0, 2, 1, 0, fr, fg, fb, a);
+    gfx_rect((GfxRect){NV_TELA_W - 40, G_L_TOPO, 40, NV_TELA_H - G_L_TOPO}, 0, GFX_VEU_CSS, 0, 3, 1, 0, fr, fg, fb, a);
+    gfx_rect((GfxRect){0, NV_TELA_H - 110, NV_TELA_W, 110}, 0, GFX_VEU_CSS, 0, 0, 1, 0, fr, fg, fb, a);
   }
 
   // (A gaveta de categorias vem depois da barra de ajuda, por cima de tudo.)

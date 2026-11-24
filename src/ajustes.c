@@ -734,6 +734,9 @@ typedef enum {
   // ADD-ONS ADDED BY HAND on this device (addonslocais.h): add by URL, the list,
   // remove. State in addons-locais-p<N>.txt, never in ajustes.txt.
   AJ_ADDON_LOCAL_ADD, AJ_ADDON_LOCAL_LISTA, AJ_ADDON_LOCAL_REM,
+  // Live TV theme (glass channel list, guia.c): Ambient / Graphite / Midnight
+  // blue / Warm cinema / Emerald. Local, append-only.
+  AJ_LTV_TEMA,
   AJ_N
 } OpcaoId;
 _Static_assert(DEBRID_RD == 0 && DEBRID_TB == 1 && DEBRID_PM == 2 && DEBRID_AD == 3,
@@ -1355,6 +1358,7 @@ static const char *ST_ALFA_MAC = "0123456789abcdef:";
 // o sistema gera, então tem maiúsculas (hosts são sensíveis a caixa no caminho)
 // e os sinais que faltavam ao alfabeto do portal.
 // Add-on links carry their configuration in the path: every URL-safe sign.
+static const char *V_LTV_TEMA[] = { "Ambiente", "Grafite", "Azul meia-noite", "Cinema", "Esmeralda" };
 static const char *ADDON_ALFA_URL =
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:-/?=&%~_+,!@$*'()[];|#";
 static const char *CUR_ALFA_URL =
@@ -1883,6 +1887,7 @@ static const Opcao OPCOES[AJ_N] = {
   ACAO("Adicionar addon pela URL"),
   ESC("Addons adicionados nesta TV", NULL, 1),       // dynamic
   ACAO("Remover o addon escolhido"),
+  ESC("Tema da TV ao vivo", V_LTV_TEMA, 5),
 };
 
 // Nome de cada opcao no arquivo. O formato era POSICIONAL — uma linha por
@@ -2218,6 +2223,7 @@ static const char *CHAVE[] = {
   "heroFolderDetailsLocal",
   "-iptvResUso", "-iptvResAuto", "-iptvResLista", "-iptvResAdd", "-iptvResRem",
   "-addonLocalAdd", "-addonLocalLista", "-addonLocalRem",
+  "ltvTema",
 };
 // QUATRO VETORES PARALELOS indexados pelo mesmo enum AJ_*: OPCOES, CHAVE,
 // valor e as secoes. OPCOES ja e declarado [AJ_N], e `valor` aceita inicializacao
@@ -3825,6 +3831,7 @@ int   ajustes_livetv_formato(void)    { return valor[AJ_LIVETV_FORMATO]; }
 int   ajustes_livetv_modo(void)       { return valor[AJ_LIVETV_MODO]; }
 int   ajustes_livetv_proxy(void)      { return lig(AJ_LIVETV_PROXY); }
 int   ajustes_livetv_sugerir(void)    { return lig(AJ_LIVETV_SUGERIR); }
+int   ajustes_ltv_tema(void) { int v = valor[AJ_LTV_TEMA]; return v >= 0 && v < 5 ? v : 0; }
 void  ajustes_livetv_aplicar_proxy(int l) { valor[AJ_LIVETV_PROXY] = l ? 0 : 1; AJ_COM_ORIGEM(AJLOG_CENTRAL, gravar()); }
 void  ajustes_livetv_aplicar_modo(int m) { if (m >= 0 && m < 3) { valor[AJ_LIVETV_MODO] = m; AJ_COM_ORIGEM(AJLOG_CENTRAL, gravar()); } }
 unsigned ajustes_livetv_espera_ms(void) {
@@ -6169,7 +6176,7 @@ static int somenteDesteAparelho(int op) {
     case AJ_ADDON_LOCAL_ADD: case AJ_ADDON_LOCAL_LISTA: case AJ_ADDON_LOCAL_REM: /* addons-locais-p<N>.txt */
     case AJ_LIVETV_RES: case AJ_LIVETV_FORMATO: case AJ_LIVETV_ESPERA:
     case AJ_LIVETV_DIAG: case AJ_LIVETV_MODO: case AJ_LIVETV_PROXY: /* rede e provedor desta casa: o web nao tem */
-    case AJ_LIVETV_SUGERIR:
+    case AJ_LIVETV_SUGERIR: case AJ_LTV_TEMA:
     case AJ_HOME_LAYOUT:    /* a Dinamica nao tem par na conta (selected_layout) */
     case AJ_PERFIL_PESQ:    /* estado em recomenda.c, por conta: nunca no blob */
     case AJ_PERFIL_EDITAR:
@@ -7969,6 +7976,7 @@ static const char *ajudaOpcaoBase(int op) {
     case AJ_LIVETV_FORMATO: return "Automático usa o formato que a conta Xtream declara e lembra o que tocou. HLS ou TS pede esse formato primeiro, mesmo quando a conta só declara o outro.";
     case AJ_LIVETV_ESPERA: return "Quanto tempo o canal tem para mostrar a imagem antes de o app passar para a próxima fonte ou mostrar o erro. Automática espera 15 s no Xtream e 25 s nos addons.";
     case AJ_LIVETV_PROXY: return "Nos canais Xtream que chegam como HLS, o app junta os segmentos num fluxo TS contínuo e entrega à TV, que toca TS contínuo e não toca o HLS desses canais. Canal que já é TS contínuo vai direto. Desligado, a TV recebe o HLS do provedor.";
+    case AJ_LTV_TEMA: return "As cores da lista de canais. Ambiente pinta o fundo com a cor do logo do canal escolhido.";
     case AJ_LIVETV_SUGERIR: return "Os canais que a lista não separa em categorias são agrupados por sugestão do Jev, que recebe só o nome do canal. As categorias que a lista já traz não mudam.";
     case AJ_LIVETV_MODO: return "Teste para TVs em que o canal chega mas não aparece. A é o modo de sempre; B não escolhe a faixa de vídeo antes de o canal abrir; C também manda o pedido no formato de transmissão ao vivo. O diagnóstico da Live TV testa os três.";
     case AJ_LIVETV_DIAG: return "Mede a rede até o provedor, lê a conta Xtream e testa vários canais: se tocam, em que formato, com que resolução e em quanto tempo. No fim sugere ajustes da Live TV e pode aplicá-los.";

@@ -116,6 +116,6 @@ cc -std=c11 -DNV_TPK40 -Isrc "$work/threads.c" -lpthread -o "$work/threads"
 # Exercise account persistence and source routing with the TPK40 storage path.
 cc -std=c11 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE \
   -DNV_TPK40 -O1 -g -Wall -Wextra -Isrc tests/iptv_accounts.c \
-  src/iptvfontes.c src/xtream.c src/m3u.c src/m3u_parse.c src/stalker.c src/js.c \
+  src/iptvfontes.c src/iptvreserva.c src/xtream.c src/m3u.c src/m3u_parse.c src/stalker.c src/js.c \
   -lpthread -o "$work/accounts"
 "$work/accounts" "$work/data"

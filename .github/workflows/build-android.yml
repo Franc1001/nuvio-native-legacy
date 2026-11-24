@@ -46,8 +46,10 @@ jobs:
 
       - name: Unit tests for Live TV accounts
         run: |
+          bash tests/iptvreserva.sh
           bash tests/xtream.sh
           bash tests/m3u.sh
+          bash tests/stalker_portal.sh
           bash tests/catcanalvazio.sh
           bash tests/addonslocais.sh
 

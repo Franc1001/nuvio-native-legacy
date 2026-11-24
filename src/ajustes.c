@@ -28,6 +28,7 @@
 #include "xtream.h"
 #include "m3u.h"
 #include "iptvfontes.h"
+#include "iptvconta_reserva.h"
 #include "addonslocais.h"
 #include "perfisessao.h"
 #include "guia.h"
@@ -726,6 +727,10 @@ typedef enum {
   // Hero logo and information size (0 Normal, 1 Grande, 2 Muito grande). LOCAL, append-only.
   AJ_HERO_TAMANHO,
   AJ_HERO_PASTA_DETALHES, // Device-local folder hero details, append-only; on by default.
+  // BACKUP SERVERS of the Live TV account being edited (iptvconta_reserva.h):
+  // server in use, automatic switching, the list, add and remove. The state
+  // lives in the account's credential file, never in ajustes.txt.
+  AJ_IPTV_RES_USO, AJ_IPTV_RES_AUTO, AJ_IPTV_RES_LISTA, AJ_IPTV_RES_ADD, AJ_IPTV_RES_REM,
   // ADD-ONS ADDED BY HAND on this device (addonslocais.h): add by URL, the list,
   // remove. State in addons-locais-p<N>.txt, never in ajustes.txt.
   AJ_ADDON_LOCAL_ADD, AJ_ADDON_LOCAL_LISTA, AJ_ADDON_LOCAL_REM,
@@ -1870,6 +1875,11 @@ static const Opcao OPCOES[AJ_N] = {
   ESC("Suavizar degradês", V_DEGRADES, 3),
   ESC("Tamanho do destaque", V_HERO_TAMANHO, 3),       // local: heroSizeLocal
   ESC("Mostrar detalhes da pasta no destaque", V_LIGA, 2),
+  ESC("Servidor em uso", NULL, 1),                   // account file, dynamic
+  ESC("Trocar de servidor sozinho", V_LIGA, 2),      // account file
+  ESC("Servidores de reserva", NULL, 1),             // dynamic: the backups
+  ACAO("Adicionar servidor de reserva"),
+  ACAO("Remover o servidor escolhido"),
   ACAO("Adicionar addon pela URL"),
   ESC("Addons adicionados nesta TV", NULL, 1),       // dynamic
   ACAO("Remover o addon escolhido"),
@@ -2206,6 +2216,7 @@ static const char *CHAVE[] = {
   "suavizarDegradesLocal",
   "heroSizeLocal",
   "heroFolderDetailsLocal",
+  "-iptvResUso", "-iptvResAuto", "-iptvResLista", "-iptvResAdd", "-iptvResRem",
   "-addonLocalAdd", "-addonLocalLista", "-addonLocalRem",
 };
 // QUATRO VETORES PARALELOS indexados pelo mesmo enum AJ_*: OPCOES, CHAVE,
@@ -2398,6 +2409,8 @@ static void performanceAutoMigrar(void) {
   performanceAutoVersao = 1;
   gravar(); // Values and migration version share the atomic settings write.
 }
+static void ajResEspelhar(void);
+#define ajResEspelharDepois ajResEspelhar
 // Account metadata/credentials live in the native registry, never the sync blob.
 static void ajIptvEspelhar(void) {
   IptvConta c;
@@ -2409,6 +2422,7 @@ static void ajIptvEspelhar(void) {
     else if(c.tipo==IPTV_M3U)m3u_fonte_selecionar(c.id);
     else stalker_fonte_selecionar(c.id);
   }
+  ajResEspelharDepois();
 }
 static const char *ajIptvNome(int indice) {
   static IptvConta cs[IPTV_MAX_CONTAS];
@@ -2466,6 +2480,68 @@ static char *ajIptvRascunho(int op,size_t *n) {
 #undef IPTVCAMPO
   return NULL;
 }
+// --- BACKUP SERVERS of the account being edited ------------------------------
+static int ajIptvReserva(int op) { return op>=AJ_IPTV_RES_USO && op<=AJ_IPTV_RES_REM; }
+static int resResultado=-1;  // -1 nothing; 1 added; 2 invalid; 3 full; 4 repeated
+// Copy of the selected account's backups. Static: the struct is large and the
+// drawing asks several times per frame.
+static const IptvReservas *ajResLer(int *tipo,char *principal,unsigned n) {
+  static IptvReservas r;
+  int t=iptvconta_reservas(&r,principal,n);
+  if(tipo)*tipo=t;
+  return t?&r:NULL;
+}
+static void ajResEspelhar(void) {
+  const IptvReservas *r=ajResLer(NULL,NULL,0);
+  int n=r?r->n:0;
+  valor[AJ_IPTV_RES_USO]=r?r->ativo:0;
+  valor[AJ_IPTV_RES_AUTO]=r && !r->autoTroca ? 1 : 0;
+  if(valor[AJ_IPTV_RES_LISTA]>n)valor[AJ_IPTV_RES_LISTA]=n;
+  if(valor[AJ_IPTV_RES_LISTA]<0)valor[AJ_IPTV_RES_LISTA]=0;
+}
+static int ajResDisponivel(int op) {
+  const IptvReservas *r;
+  if(iptvForm.tipo && iptvForm.nova)return 0;
+  if(!(r=ajResLer(NULL,NULL,0)))return 0;
+  return op==AJ_IPTV_RES_ADD || r->n>0;
+}
+// "Principal · host" / "Reserva 2 · host": host only, never path or query
+// (an M3U URL carries the password there).
+static const char *ajResNome(int k) {
+  static char b[200];
+  char principal[IPTVRES_URL],host[160];
+  int tipo;
+  const IptvReservas *r=ajResLer(&tipo,principal,sizeof principal);
+  const char *u=r?iptvres_servidor(r,principal,k):NULL;
+  if(!u)return i18n("Nenhum");
+  iptvres_curto(u,host,sizeof host);
+  if(!k)snprintf(b,sizeof b,"%s \xc2\xb7 %s",i18n("Principal"),host);
+  else snprintf(b,sizeof b,"%s %d \xc2\xb7 %s",i18n("Reserva"),k,host);
+  return b;
+}
+static void ajResAdicionar(const char *texto) {
+  char t[IPTVRES_URL];size_t n;int r;
+  snprintf(t,sizeof t,"%s",texto?texto:"");
+  n=strlen(t);while(n && (t[n-1]==' ' || t[n-1]=='\n'))t[--n]=0;
+  if(!n)return;
+  r=iptvconta_reserva_adicionar(t);
+  resResultado=r>0?1:r==-1?3:r==-2?4:2;
+  ajResEspelhar();
+  if(r>0) {
+    const IptvReservas *l=ajResLer(NULL,NULL,0);
+    valor[AJ_IPTV_RES_LISTA]=l?l->n:0;
+    printf("[livetv] servidor de reserva adicionado (%d na conta)\n",l?l->n:0);fflush(stdout);
+  }
+}
+static const char *ajResAddTexto(void) {
+  switch(resResultado) {
+    case 1: return i18n("adicionado");
+    case 2: return i18n("endereço inválido");
+    case 3: return i18n("limite de 8 servidores de reserva");
+    case 4: return i18n("já está na lista");
+    default: return i18n("OK adiciona");
+  }
+}
 // --- ADD-ONS ADDED BY HAND --------------------------------------------------
 static int addLocResultado=-1;  // -1 nothing; 1 added; 2 invalid; 3 full; 4 repeated
 static void addLocEspelhar(void) {
@@ -2503,6 +2579,7 @@ static const char *addLocAddTexto(void) {
   }
 }
 static int ajIptvLinhaVisivel(int op) {
+  if(ajIptvReserva(op))return iptvForm.tipo && !iptvForm.nova;
   if(ajIptvGerenciador(op))return !iptvForm.tipo;
   if(op==AJ_IPTV_ACOES || op==AJ_IPTV_EXCLUIR || ajIptvAdicionar(op) || op==AJ_IPTV_CONTA || op==AJ_IPTV_REMOVER)return 0;
   if(op==AJ_IPTV_SALVAR)return iptvForm.tipo && iptvForm.nova;
@@ -2716,7 +2793,7 @@ int ajustes_foco_no_indice(void) { return focoIndice; }
 // e a opcao 0 do enum).
 static int sairArmado;
 static int pedeConfirmacao(int op) {
-  return op == AJ_SAIR || op == AJ_IPTV_REMOVER || op == AJ_ADDON_LOCAL_REM || op == AJ_STALKER_LIMPAR || op == AJ_XTREAM_LIMPAR || op == AJ_M3U_LIMPAR || op == AJ_JF_SAIR ||
+  return op == AJ_SAIR || op == AJ_IPTV_REMOVER || op == AJ_IPTV_RES_REM || op == AJ_ADDON_LOCAL_REM || op == AJ_STALKER_LIMPAR || op == AJ_XTREAM_LIMPAR || op == AJ_M3U_LIMPAR || op == AJ_JF_SAIR ||
          op == AJ_EM_SAIR || op == AJ_PX_SAIR;
 }
 
@@ -3215,6 +3292,7 @@ static int ajOpcaoDisponivel(int op) {
   if(op==AJ_STALKER_PORTAL || op==AJ_STALKER_MAC)tipo=IPTV_STALKER;
   if(tipo)return iptvForm.tipo && iptvForm.nova ? iptvForm.tipo==tipo : iptv_conta_selecionada(&c) && c.tipo==tipo;
   if(op==AJ_XTREAM_LIMPAR || op==AJ_M3U_LIMPAR || op==AJ_STALKER_LIMPAR)return 0;
+  if(ajIptvReserva(op))return ajResDisponivel(op);
   if(op==AJ_ADDON_LOCAL_LISTA || op==AJ_ADDON_LOCAL_REM)return addonslocais_n()>0;
   if(op==AJ_IPTV_CONTA || op==AJ_IPTV_NOME || op==AJ_IPTV_ATIVA || op==AJ_IPTV_REMOVER)return (iptvForm.tipo && iptvForm.nova) || iptv_contas(NULL,0)>0;
   if(ajIptvAdicionar(op))return iptv_contas(NULL,0)<IPTV_MAX_CONTAS;
@@ -6087,6 +6165,7 @@ static int somenteDesteAparelho(int op) {
     case AJ_SELOS_CORES:    /* no web a cor vem do pacote de selos importado */
     case AJ_SELOS_PACOTE: case AJ_SELOS_PACOTE_ADD: case AJ_SELOS_PACOTE_REM: /* a escolha e por perfil, em selospacote.c */
     case AJ_URL_LISTA: case AJ_URL_M3U_ADD: case AJ_URL_XMLTV_ADD: case AJ_URL_REM: /* por perfil, em ltv-urls-p<N>.txt */
+    case AJ_IPTV_RES_USO: case AJ_IPTV_RES_AUTO: case AJ_IPTV_RES_LISTA: case AJ_IPTV_RES_ADD: case AJ_IPTV_RES_REM: /* no arquivo da conta */
     case AJ_ADDON_LOCAL_ADD: case AJ_ADDON_LOCAL_LISTA: case AJ_ADDON_LOCAL_REM: /* addons-locais-p<N>.txt */
     case AJ_LIVETV_RES: case AJ_LIVETV_FORMATO: case AJ_LIVETV_ESPERA:
     case AJ_LIVETV_DIAG: case AJ_LIVETV_MODO: case AJ_LIVETV_PROXY: /* rede e provedor desta casa: o web nao tem */
@@ -7402,6 +7481,10 @@ static const char *textoLeitura(int op) {
          : i18n("OK de novo para sair");
   if (op == AJ_IPTV_REMOVER || op == AJ_STALKER_LIMPAR || op == AJ_XTREAM_LIMPAR || op == AJ_M3U_LIMPAR)
     return sairArmado == op ? i18n("OK de novo para remover") : "";
+  if (op == AJ_IPTV_RES_REM)
+    return sairArmado == op ? i18n("OK de novo para remover")
+         : valor[AJ_IPTV_RES_LISTA] > 0 ? i18n("OK remove") : i18n("nenhum servidor escolhido");
+  if (op == AJ_IPTV_RES_ADD) return ajResAddTexto();
   if (op == AJ_ADDON_LOCAL_ADD) return addLocAddTexto();
   if (op == AJ_ADDON_LOCAL_REM)
     return sairArmado == op ? i18n("OK de novo para remover")
@@ -7491,6 +7574,7 @@ static int inativa(int op) {
     // Remover so vale para o pacote escolhido que foi posto nesta TV.
     case AJ_SELOS_PACOTE_REM: return selospacote_ativo() < 0 || !selospacote_da_tv(selospacote_ativo());
     case AJ_URL_REM: return valor[AJ_URL_LISTA] < 1;
+    case AJ_IPTV_RES_REM: return valor[AJ_IPTV_RES_LISTA] < 1;
     case AJ_ADDON_LOCAL_REM: return valor[AJ_ADDON_LOCAL_LISTA] < 1;
     // Sem o relogio nao ha ilha para onde minimizar: sai para a pagina, como antes.
     case AJ_SAIDA_PLAYER: return !lig(AJ_RELOGIO);
@@ -7744,6 +7828,8 @@ static const char *ajudaOpcaoBase(int op) {
       return "Só dá para remover um pacote que foi adicionado nesta TV.";
     if (op == AJ_URL_REM)
       return "Escolha antes uma lista ou guia.";
+    if (op == AJ_IPTV_RES_REM)
+      return "Escolha antes um servidor em Servidores de reserva.";
     if (op == AJ_ADDON_LOCAL_REM)
       return "Escolha antes um addon em Addons adicionados nesta TV.";
     if (op == AJ_SAIDA_PLAYER)
@@ -7798,6 +7884,11 @@ static const char *ajudaOpcaoBase(int op) {
       return "O Guia de TV reúne todas as contas ativadas deste perfil.";
     case AJ_IPTV_NOME: return "Nome da conta";
     case AJ_IPTV_REMOVER: return "Apaga apenas a conta selecionada e seus canais.";
+    case AJ_IPTV_RES_USO: return "O servidor que a conta usa agora. Escolher outro vale na hora; com a troca automática ligada, o app muda sozinho quando este cair.";
+    case AJ_IPTV_RES_AUTO: return "Quando o servidor em uso não responde, está bloqueado ou fora do ar, a lista e os canais passam para o próximo servidor da conta. Senha recusada ou telas cheias não trocam.";
+    case AJ_IPTV_RES_LISTA: return "Outros endereços do mesmo provedor, com o mesmo usuário e senha (ou MAC). Aqui aparece só o servidor.";
+    case AJ_IPTV_RES_ADD: return "Endereço e porta que o provedor mandou como reserva: backup.servidor.tv:8080. Na lista M3U também vale o link completo.";
+    case AJ_IPTV_RES_REM: return "Tira da conta o servidor de reserva escolhido.";
     case AJ_ADDON_LOCAL_ADD: return "Cole ou digite o link do addon (manifest.json), como no Stremio. Ele fica salvo nesta TV, sem precisar de conta.";
     case AJ_ADDON_LOCAL_LISTA: return "Addons que você adicionou nesta TV. Aqui aparece só o servidor.";
     case AJ_ADDON_LOCAL_REM: return "Tira desta TV o addon escolhido.";
@@ -9655,6 +9746,14 @@ static int definirValorDireto(int op, int novo) {
   if (ajLegendaPrincipal(op)) return ajLegendaDefinir(op, novo);
   if (ajFalhaBackend(op)) return ajFalhaDefinir(op, novo);
   if(op==AJ_IPTV_ATIVA && iptvForm.tipo && iptvForm.nova) { iptvForm.ativa=novo==0;valor[op]=novo;return 1; }
+  if(op==AJ_IPTV_RES_USO || op==AJ_IPTV_RES_AUTO) {
+    int ok=op==AJ_IPTV_RES_USO?iptvconta_reserva_usar(novo):iptvconta_reserva_auto(novo==0);
+    ajResEspelhar();
+    // Another server in use: the guide reloads the channel list from it.
+    if(ok && op==AJ_IPTV_RES_USO)guia_recarregar(1);
+    return ok;
+  }
+  if(op==AJ_IPTV_RES_LISTA) { valor[op]=novo;sairArmado=0;return 1; }
   if(op==AJ_ADDON_LOCAL_LISTA) { valor[op]=novo;sairArmado=0;return 1; }
   if(op==AJ_IPTV_CONTA || op==AJ_IPTV_ATIVA) {
     int ok=op==AJ_IPTV_CONTA?iptv_conta_selecionar(novo):iptv_conta_ativar(novo==0);
@@ -9749,6 +9848,7 @@ static int definirValorDireto(int op, int novo) {
 }
 static void mudarValorDireto(int op, int dir) {
   if (op == AJ_XTREAM_CONEXOES) valor[op] = xtream_conexoes_modo();
+  if (ajIptvReserva(op)) ajResEspelhar();
   definirValorDireto(op, passoAdiante(op, dir));
 }
 
@@ -9949,11 +10049,28 @@ static void eventoTela(const SDL_Event *e) {
       teclado_abrir_com("Link do addon", "https://…/manifest.json ou stremio://…", 1500, ADDON_ALFA_URL, NULL);
       return;
     }
+    if (focoOp == AJ_IPTV_RES_ADD) {
+      int tipo=0;
+      if(!ajResLer(&tipo,NULL,0))return;
+      stCampo = focoOp;resResultado=-1;
+      teclado_abrir_com("Servidor de reserva",
+                        tipo==IPTV_M3U?"Endereço e porta, ou o link completo da lista":"Endereço e porta, sem http://",
+                        tipo==IPTV_M3U?1099:64, tipo==IPTV_M3U?CUR_ALFA_URL:ST_ALFA_PORTAL, NULL);
+      return;
+    }
     // O primeiro OK so arma (ver pedeConfirmacao); o segundo age.
+    if (focoOp == AJ_IPTV_RES_REM && valor[AJ_IPTV_RES_LISTA] < 1) return;
     if (focoOp == AJ_ADDON_LOCAL_REM && valor[AJ_ADDON_LOCAL_LISTA] < 1) return;
     if (pedeConfirmacao(focoOp) && sairArmado != focoOp) { sairArmado = focoOp; return; }
     sairArmado = 0;
     if (focoOp == AJ_ADDON_LOCAL_REM) { addLocRemover(); return; }
+    if (focoOp == AJ_IPTV_RES_REM) {
+      int k=valor[AJ_IPTV_RES_LISTA],ok=iptvconta_reserva_remover(k);
+      resResultado=-1;ajResEspelhar();
+      if(ok) { valor[AJ_IPTV_RES_LISTA]=0;ajResEspelhar();guia_recarregar(1); }
+      uxNotificar(ok?"Ajuste salvo nesta TV.":"Não foi possível agora. Tente novamente.");
+      return;
+    }
     if(focoOp==AJ_IPTV_REMOVER) {
       IptvConta c;
       if(iptv_conta_remover(&c)) {
@@ -10148,6 +10265,7 @@ void ajustes_atualizar(float dt, Uint32 agora) {
         uxNotificar(ok?"Ajuste salvo nesta TV.":"Não foi possível agora. Tente novamente.");
       }
       else if (stCampo == AJ_ADDON_LOCAL_ADD) addLocAdicionar(teclado_texto());
+      else if (stCampo == AJ_IPTV_RES_ADD) { ajResAdicionar(teclado_texto()); if (resResultado == 1) guia_recarregar(1); }
       else if (stCampo == AJ_STALKER_MAC) stalker_definir_mac(teclado_texto());
       else if (stCampo == AJ_M3U_URL || stCampo == AJ_M3U_EPG) {
         int ok = stCampo == AJ_M3U_URL ? m3u_definir_lista(teclado_texto()) : m3u_definir_epg(teclado_texto());
@@ -10322,6 +10440,10 @@ static int nValores(int op) {
   if (op == AJ_PLAYER_EXTERNO) return 3 + ppN();
   if (op == AJ_PLAYER_ANIME) return 4 + ppN();
   if (op == AJ_URL_LISTA) return 1 + urlN;
+  if (op == AJ_IPTV_RES_USO || op == AJ_IPTV_RES_LISTA) {
+    const IptvReservas *r = ajResLer(NULL, NULL, 0);
+    return 1 + (r ? r->n : 0);
+  }
   if (op == AJ_ADDON_LOCAL_LISTA) return 1 + addonslocais_n();
 #ifndef __EMSCRIPTEN__
   // "YouTube" (o 4o valor) so toca no .wgt da Samsung (trailerfonte.c, existe).
@@ -10346,6 +10468,9 @@ static const char *textoValor(int op) {
   if(op==AJ_IPTV_CONTA)return ajIptvNome(iptv_conta_indice());
   static char buf[48];
   if (op == AJ_XTREAM_CONEXOES) return i18n(V_CONEXOES[xtream_conexoes_modo()]);
+  if (op == AJ_IPTV_RES_USO) { const IptvReservas *r = ajResLer(NULL, NULL, 0); return ajResNome(r ? r->ativo : 0); }
+  if (op == AJ_IPTV_RES_AUTO) { const IptvReservas *r = ajResLer(NULL, NULL, 0); return i18n(V_LIGA[r && !r->autoTroca ? 1 : 0]); }
+  if (op == AJ_IPTV_RES_LISTA) return valor[op] > 0 ? ajResNome(valor[op]) : i18n("Nenhum");
   if (op == AJ_ADDON_LOCAL_LISTA) return valor[op] > 0 && valor[op] <= addonslocais_n() ? addonslocais_nome(valor[op] - 1) : i18n("Nenhum");
   if (ajFalhaBackend(op)) {
     int v = ajFalhaValor(op);
@@ -10910,6 +11035,7 @@ static AjPreview familiaPreviaOpcao(int op) {
     case AJ_SELOS_PACOTE_ADD: case AJ_SELOS_PACOTE_REM:
     case AJ_URL_LISTA: case AJ_URL_M3U_ADD: case AJ_URL_XMLTV_ADD: case AJ_URL_REM:
     case AJ_XTREAM_CONEXOES: case AJ_XTREAM_CONTA: case AJ_GUIA_RECARREGAR: case AJ_M3U_URL: case AJ_M3U_EPG: case AJ_M3U_LIMPAR:
+    case AJ_IPTV_RES_USO: case AJ_IPTV_RES_AUTO: case AJ_IPTV_RES_LISTA: case AJ_IPTV_RES_ADD: case AJ_IPTV_RES_REM:
     case AJ_ADDON_LOCAL_ADD: case AJ_ADDON_LOCAL_LISTA: case AJ_ADDON_LOCAL_REM:
     case AJ_DIAGNOSTICO: case AJ_VELOCIDADE: case AJ_LIVETV_DIAG:
     case AJ_P2P_URL: case AJ_P2P_TESTAR:

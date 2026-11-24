@@ -1489,8 +1489,13 @@ static int montarCanalStalker(const char *id, const char *url) {
 // watchdog passa para a seguinte. Em Automatica o canal escolhido vai primeiro
 // e as variantes ficam de reserva.
 #define XT_VARIANTES_MAX 3
+// BACKUP SERVERS (iptvreserva.h): after every source of the server in use, the
+// same channel on each other address of the account, in the first format. If
+// the server in use stops serving video while its API still answers (or the
+// other way round), the watchdog lands on a backup; the one that plays becomes
+// the server in use (xtream_formato_canal_funcionou).
 static int resolverCanalXtream(void) {
-  static Stream s[3 * XT_VARIANTES_MAX];
+  static Stream s[3 * XT_VARIANTES_MAX + IPTVRES_MAX];
   GuiaVariante v[XT_VARIANTES_MAX], ord[XT_VARIANTES_MAX];
   const char *ext[2];
   int k = xtream_formatos_canal(player_id_canal(), ext), i, j, n = 0, nv, no = 0;
@@ -1531,6 +1536,19 @@ static int resolverCanalXtream(void) {
       s[n].fileIdx = -1;
       n++;
     }
+  { int ns = xtream_servidores_canal(player_id_canal()), pos;
+    for (pos = 1; pos < ns && k > 0 && no > 0 && n < (int)(sizeof s / sizeof *s); pos++) {
+      char url[NV_MEDIA_URL_MAX];
+      const char *f = !strcmp(ext[0], "ts") ? "TS" : "HLS";
+      if (!xtream_url_formato_em(ord[0].id, ext[0], pos, url, sizeof url)) continue;
+      snprintf(s[n].url, sizeof s[n].url, "%s", url);
+      snprintf(s[n].rotulo, sizeof s[n].rotulo, "Xtream (%s) · %s %d", f, i18n("servidor de reserva"), pos);
+      snprintf(s[n].provedor, sizeof s[n].provedor, "%s", "xtream");
+      s[n].altura = ord[0].altura;
+      s[n].fileIdx = -1;
+      n++;
+    }
+    if (ns > 1) printf("[livetv] xtream: %d servidor(es) de reserva na lista de fontes\n", ns - 1); }
   if (!n) return -1;
   if (nv > 1 || alvo)
     printf("[livetv] xtream: %d variante(s) do canal, %d fonte(s); resolucao principal %dp, primeira %s\n",
@@ -1543,20 +1561,33 @@ static int resolverCanalXtream(void) {
 // User-Agent e o Referer da lista (|user-agent=, #EXTVLCOPT). O resto (proxy de
 // TS, cabecalhos em todo pedido, fonte direto de reserva) e o caminho de canal
 // de addon (urlCanal). A URL pode ter usuario e senha: nunca vai para o log.
+// BACKUP SERVERS (iptvreserva.h): a channel of an M3U ACCOUNT served from the
+// account's own host gets the same URL on each backup host after it.
 static int resolverCanalM3u(void) {
-  static Stream s;
+  static Stream s[1 + IPTVRES_MAX];
   char ua[256], ref[256];
-  memset(&s, 0, sizeof s);
-  if (!guia_m3u_canal(player_id_canal(), s.url, sizeof s.url, ua, sizeof ua, ref, sizeof ref)) return -1;
+  int n = 1;
+  memset(s, 0, sizeof s);
+  if (!guia_m3u_canal(player_id_canal(), s[0].url, sizeof s[0].url, ua, sizeof ua, ref, sizeof ref)) return -1;
   { size_t u = 0;
-    if (ua[0]) u += (size_t)snprintf(s.cabecalhos + u, sizeof s.cabecalhos - u, "User-Agent: %s\n", ua);
-    if (ref[0]) snprintf(s.cabecalhos + u, sizeof s.cabecalhos - u, "Referer: %s\n", ref); }
-  snprintf(s.rotulo, sizeof s.rotulo, "%s", "M3U");
-  snprintf(s.provedor, sizeof s.provedor, "%s", "m3u");
-  s.mp4 = strstr(s.url, ".mp4") != NULL;
-  s.fileIdx = -1;
-  stream_definir_lista(&s, 1);
-  printf("[livetv] m3u: 1 fonte%s%s\n", ua[0] ? ", com User-Agent" : "", ref[0] ? ", com Referer" : "");
+    if (ua[0]) u += (size_t)snprintf(s[0].cabecalhos + u, sizeof s[0].cabecalhos - u, "User-Agent: %s\n", ua);
+    if (ref[0]) snprintf(s[0].cabecalhos + u, sizeof s[0].cabecalhos - u, "Referer: %s\n", ref); }
+  snprintf(s[0].rotulo, sizeof s[0].rotulo, "%s", "M3U");
+  snprintf(s[0].provedor, sizeof s[0].provedor, "%s", "m3u");
+  s[0].mp4 = strstr(s[0].url, ".mp4") != NULL;
+  s[0].fileIdx = -1;
+  if (m3u_e_id(player_id_canal()))
+    for (int pos = 1; n < (int)(sizeof s / sizeof *s); pos++) {
+      if (!m3u_url_reserva(player_id_canal(), s[0].url, pos, s[n].url, sizeof s[n].url)) break;
+      snprintf(s[n].cabecalhos, sizeof s[n].cabecalhos, "%s", s[0].cabecalhos);
+      snprintf(s[n].rotulo, sizeof s[n].rotulo, "M3U · %s %d", i18n("servidor de reserva"), pos);
+      snprintf(s[n].provedor, sizeof s[n].provedor, "%s", "m3u");
+      s[n].mp4 = s[0].mp4;
+      s[n].fileIdx = -1;
+      n++;
+    }
+  stream_definir_lista(s, n);
+  printf("[livetv] m3u: %d fonte(s)%s%s\n", n, ua[0] ? ", com User-Agent" : "", ref[0] ? ", com Referer" : "");
   fflush(stdout);
   return 0;
 }
@@ -6385,6 +6416,12 @@ void app_atualizar(float dt, Uint32 agora) {
       if (xt && video_pronto() && strncmp(tocouUrl, player_id_canal(), sizeof tocouUrl - 1)) {
         snprintf(tocouUrl, sizeof tocouUrl, "%s", player_id_canal());
         xtream_formato_canal_funcionou(player_id_canal(), video_url_atual());
+      }
+      // M3U account: the host that played becomes the server in use.
+      if (!xt && m3u_e_id(player_id_canal()) && video_pronto() &&
+          strncmp(tocouUrl, player_id_canal(), sizeof tocouUrl - 1)) {
+        snprintf(tocouUrl, sizeof tocouUrl, "%s", player_id_canal());
+        m3u_canal_funcionou(player_id_canal(), video_url_atual());
       }
       if (!video_pronto()) tocouUrl[0] = 0; }
     if (morta) {

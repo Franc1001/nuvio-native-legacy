@@ -20,6 +20,7 @@ static int uxValorAtual(int op) {
   if (op < 0 || op >= AJ_N) return 0;
   if (ajFonte(op)) return ajFonteAtual(op);
   if (op == AJ_XTREAM_CONEXOES) return xtream_conexoes_modo();
+  if (op == AJ_IPTV_RES_USO || op == AJ_IPTV_RES_AUTO) { ajResEspelhar(); return valor[op]; }
   if (op == AJ_SALVOS_DEST) return ajustes_fonte_biblioteca();
   if(op==AJ_GUIA_CATEGORIAS || op==AJ_IPTV_ACOES || op==AJ_IPTV_EXCLUIR)return 0;
   if(ajIptvGerenciador(op))return ajIptvQuantos(ajIptvTipo(op))?ajIptvAtualTipo(ajIptvTipo(op)):1;

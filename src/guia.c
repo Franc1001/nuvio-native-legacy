@@ -1090,6 +1090,52 @@ static int *zapL; static int nZapL, capZapL;
 static int mostraFav(void) {
   return nFavOrd > 0 && (filtro == G_FILTRO_TODAS || filtro == G_FILTRO_FAV);
 }
+
+// --- HIDDEN CHANNELS and CHANNEL ORDER (the Live TV options panel) -------------
+// Hidden: "source key TAB channel id" per line in guia-ocultos-p<N>.txt.
+// Order inside each category: 0 by number, 1 A-Z, 2 the provider's order, in
+// guia-ordemcanais-p<N>.txt. vistaMontar builds ordIdx/ordIni/ordN from both;
+// linhaN/linhaItem read them.
+#define G_MAX_OCULTOS 1000
+static char ocC[G_MAX_OCULTOS][LTV_CHAVE + 82];
+static int nOcC, ocCPerfil = -1, ordemCanais = -1;
+static int *ordIdx, *ordIni, *ordN; static int capOrdIdx, capOrdCat, ordOk;
+static unsigned char *ocFlag; static int capOcFlag;
+static void ocultosCanaisGarantir(void) {
+  char nome[48], *t, *q;
+  if (perfis_ativo() == ocCPerfil) return;
+  ocCPerfil = perfis_ativo(); nOcC = 0;
+  arquivoPerfil("ocultos", nome, sizeof nome);
+  t = dados_ler(nome);
+  for (q = t; q && *q && nOcC < G_MAX_OCULTOS; ) {
+    size_t n = strcspn(q, "\r\n");
+    if (n > 0 && n < sizeof ocC[0] && memchr(q, '\t', n)) { memcpy(ocC[nOcC], q, n); ocC[nOcC][n] = 0; nOcC++; }
+    q += n; q += strspn(q, "\r\n");
+  }
+  free(t);
+  t = lerPerfil("ordemcanais");
+  ordemCanais = t ? atoi(t) : (NV_GUIA_SO_CANAIS ? 0 : 2);   // the original guide keeps the provider order
+  if (ordemCanais < 0 || ordemCanais > 2) ordemCanais = 0;
+  free(t);
+}
+static void ocultosCanaisGravar(void) {
+  char nome[48], *buf = malloc((size_t)nOcC * sizeof ocC[0] + 2);
+  size_t k = 0;
+  if (!buf) return;
+  buf[0] = 0;
+  for (int i = 0; i < nOcC; i++) k += (size_t)sprintf(buf + k, "%s\n", ocC[i]);
+  arquivoPerfil("ocultos", nome, sizeof nome);
+  dados_gravar(nome, buf);
+  free(buf);
+}
+static void ocultoChave(const GCanal *c, char *out, size_t n);
+static int g_ordemCmp(const void *pa, const void *pb);
+static void ordemGravar(void) {
+  char nome[48], v[8];
+  arquivoPerfil("ordemcanais", nome, sizeof nome);
+  snprintf(v, sizeof v, "%d\n", ordemCanais);
+  dados_gravar(nome, v);
+}
 static int nLinhas(void) { return nVis + (mostraFav() ? 1 : 0); }
 static int linhaEhFav(int l) { return mostraFav() && l == 0; }
 static int linhaCatDe(int l) {  // indice em cats[], -1 = favoritos
@@ -1097,7 +1143,7 @@ static int linhaCatDe(int l) {  // indice em cats[], -1 = favoritos
 }
 static int linhaN(int l) {
   if (l < 0 || l >= nLinhas()) return 0;
-  return linhaEhFav(l) ? nFavOrd : catN[linhaCatDe(l)];
+  return linhaEhFav(l) ? nFavOrd : ordOk ? ordN[linhaCatDe(l)] : catN[linhaCatDe(l)];
 }
 // "Esportes · Xtream" em Todas quando ha mais de uma fonte (decisao 2: grupos
 // de mesmo nome de fontes diferentes sao linhas diferentes, e a tela diz qual).
@@ -1115,6 +1161,7 @@ static const char *linhaNome(int l) {
 static GCanal *linhaItem(int l, int c) {
   if (c < 0 || c >= linhaN(l)) return NULL;
   if (linhaEhFav(l)) return &canais[favOrd[c]];
+  if (ordOk) return &canais[ordIdx[ordIni[linhaCatDe(l)] + c]];
   return &canais[catIni[linhaCatDe(l)] + c];
 }
 
@@ -1134,18 +1181,51 @@ static void vistaMontar(void) {
     filtro = i < nLtvF ? i : G_FILTRO_TODAS;
   }
   categoriasGarantir();
+  ocultosCanaisGarantir();
+  // Hidden channels (one pass; the hidden list is short).
+  ordOk = vetorCabe(&ordIdx, &capOrdIdx, nCanais) && vetorCabe(&ordIni, &capOrdCat, nCats) &&
+          (nCats <= 0 || (ordN = realloc(ordN, sizeof(int) * (size_t)(nCats + 1))) != NULL);
+  if (ordOk && nCanais > capOcFlag) {
+    unsigned char *no = realloc(ocFlag, (size_t)nCanais + 64);
+    if (no) { ocFlag = no; capOcFlag = nCanais + 64; } else ordOk = 0;
+  }
+  if (ordOk) {
+    char k[sizeof ocC[0]];
+    for (i = 0; i < nCanais; i++) {
+      ocFlag[i] = 0;
+      if (!nOcC) continue;
+      ocultoChave(&canais[i], k, sizeof k);
+      for (int j = 0; j < nOcC; j++) if (!strcmp(ocC[j], k)) { ocFlag[i] = 1; break; }
+    }
+    // Per category: the shown channels, in the chosen order.
+    for (int c = 0, w = 0; c < nCats; c++) {
+      ordIni[c] = w; ordN[c] = 0;
+      for (i = catIni[c]; i < catIni[c] + catN[c]; i++) if (!ocFlag[i]) { ordIdx[w++] = i; ordN[c]++; }
+      if (ordemCanais != 2 && ordN[c] > 1) qsort(ordIdx + ordIni[c], (size_t)ordN[c], sizeof(int), g_ordemCmp);
+    }
+  }
   nFavOrd=0;
   for(i=0;i<nCanais && nFavOrd<G_MAX_FAV;i++)
-    if(canais[i].fav && fonteVisivel(canais[i].fonte) && !categoriaOculta(canais[i].cat))favOrd[nFavOrd++]=i;
+    if(canais[i].fav && !(ordOk && ocFlag[i]) && fonteVisivel(canais[i].fonte) && !categoriaOculta(canais[i].cat))favOrd[nFavOrd++]=i;
   nVis = 0; nZapL = 0;
   if (!vetorCabe(&vis, &capVis, nCats) || !vetorCabe(&zapL, &capZapL, nCanais)) return;
   if (filtro != G_FILTRO_FAV)
     for (i = 0; i < nCats; i++)
-      if (catN[i] > 0 && fonteVisivel(cats[i].fonte) && !categoriaOculta(i) && (filtro < 0 || cats[i].fonte == filtro)) vis[nVis++] = i;
+      if ((ordOk ? ordN[i] : catN[i]) > 0 && fonteVisivel(cats[i].fonte) && !categoriaOculta(i) && (filtro < 0 || cats[i].fonte == filtro)) vis[nVis++] = i;
   if (filtro == G_FILTRO_FAV) for (i = 0; i < nFavOrd; i++) zapL[nZapL++] = favOrd[i];
   else
     for (i = 0; i < nCanais; i++)
-      if (fonteVisivel(canais[i].fonte) && !categoriaOculta(canais[i].cat) && (filtro < 0 || canais[i].fonte == filtro)) zapL[nZapL++] = i;
+      if (!(ordOk && ocFlag[i]) && fonteVisivel(canais[i].fonte) && !categoriaOculta(canais[i].cat) && (filtro < 0 || canais[i].fonte == filtro)) zapL[nZapL++] = i;
+}
+
+static void ocultoChave(const GCanal *c, char *out, size_t n) { snprintf(out, n, "%s\t%s", chaveDo(c), c->id); }
+static int g_ordemCmp(const void *pa, const void *pb) {
+  int a = *(const int *)pa, b = *(const int *)pb, r = 0;
+  if (ordemCanais == 0) {
+    int na = canais[a].numero > 0 ? canais[a].numero : 1 << 30, nb = canais[b].numero > 0 ? canais[b].numero : 1 << 30;
+    r = (na > nb) - (na < nb);
+  } else r = strcasecmp(canais[a].nome, canais[b].nome);
+  return r ? r : (a > b) - (a < b);
 }
 
 static void filtroDefinir(int f) {
@@ -3968,7 +4048,12 @@ static void painelEvento(SDL_Keycode k, Uint32 agora) {
   }
 }
 
+// LIVE TV OPTIONS PANEL (glass list, opened with RIGHT or the Options chip).
+static int vpAberto, vpFoco;
+static void vpAbrir(void);
+static int  vpEvento(SDL_Keycode k, int repeticao);
 static void sair(void) {
+  if (vpAberto) { vpAberto = 0; return; }
   if (opcoesAberto) { opcoesAberto = 0; return; }
   if (painel) { if (paModo == 1 && fNivel) filtrosVoltar(); else painelFechar(); return; }
   if (catAberto) { catFechar(); return; }
@@ -4164,7 +4249,7 @@ static int fontesEvento(SDL_Keycode k, Uint32 agora) {
 static void topoAcionar(int item) {
   if (item == G_TOPO_BUSCAR) buscaAbrir();
   else if (item == G_TOPO_CATEGORIAS) catAbrir(2, 0);
-  else if (item == G_TOPO_OPCOES) { opcoesAberto = 1; opcoesFoco = G_TOPO_ADDONS; }
+  else if (item == G_TOPO_OPCOES) { if (NV_GUIA_SO_CANAIS) vpAbrir(); else { opcoesAberto = 1; opcoesFoco = G_TOPO_ADDONS; } }
   else if (item == G_TOPO_ADDONS) painelAbrir();
   else if (item == G_TOPO_FILTROS) filtrosAbrir();
   else if (item == G_TOPO_DIAG) pedLivetvDiag = 1;
@@ -4213,6 +4298,12 @@ void guia_evento(const SDL_Event *e) {
   // A dica sai na primeira tecla; a tecla segue valendo.
   dicaDesde = 0;
 
+  if (vpAberto) {
+    if (k == SDLK_AC_BACK || k == SDLK_ESCAPE || k == SDLK_BACKSPACE ||
+        k == SDLK_DELETE || e->key.keysym.scancode == NV_SCANCODE_BACK) { vpAberto = 0; return; }
+    vpEvento(k, e->key.repeat);
+    return;
+  }
   if (opcoesAberto) {
     if (k == SDLK_AC_BACK || k == SDLK_ESCAPE || k == SDLK_BACKSPACE ||
         k == SDLK_DELETE || e->key.keysym.scancode == NV_SCANCODE_BACK) {
@@ -4292,6 +4383,9 @@ void guia_evento(const SDL_Event *e) {
   // O painel de categorias captura as setas e o OK enquanto aberto.
   if (catAberto) {
     catUlt = agora;
+    if (k == SDLK_UP && gVidro() && catAberto == 2 && catFoco == 0 && !e->key.repeat) {
+      catFechar(); focoTopo = 1; focoFontes = 0; topoCol = G_TOPO_BUSCAR; return;
+    }
     if (k == SDLK_UP || k == SDLK_DOWN) {
       int dir = k == SDLK_DOWN ? 1 : -1;
       if (catAberto == 1) {
@@ -4357,6 +4451,16 @@ void guia_evento(const SDL_Event *e) {
   if (k == SDLK_UP || k == SDLK_DOWN) {
     int dir = (k == SDLK_DOWN) ? 1 : -1;
     int fresco = !e->key.repeat && !(dirSeg == k && agora - dirTick < G_REP_MS);
+    // GLASS LIST: Up/Down stay inside the open category and wrap around at
+    // its ends (a fresh press wraps; holding stops at the edge).
+    if (gVidro()) {
+      int n = linhaN(focoLin);
+      dirSeg = k; dirTick = agora;
+      if (n < 1) return;
+      if (dir > 0) { if (focoCol + 1 < n) focoCol++; else if (fresco) focoCol = 0; }
+      else         { if (focoCol > 0) focoCol--; else if (fresco) focoCol = n - 1; }
+      return;
+    }
     // Only a fresh Up at the first channel may leave the channel list.
     if (dir < 0 && fresco && focoLin == 0 && (!modoLista || focoCol == 0)) {
       focoTopo = 1; focoFontes = 0;
@@ -4385,7 +4489,7 @@ void guia_evento(const SDL_Event *e) {
     // CHANNEL LIST (TiviMate-like): no timeline to move; Left is the categories.
     janelaDesl = 0;
     if (k == SDLK_LEFT)  { catAbrir(2, 0); dicaUsou(); return; }
-    if (k == SDLK_RIGHT) return;
+    if (k == SDLK_RIGHT) { if (!e->key.repeat) vpAbrir(); return; }
   } else if (modoLista) {
     if (k == SDLK_LEFT)  { if (janelaDesl > 0) janelaDesl -= G_L_PASSO_MIN;
                            else { if (barraVisivel()) fontesEntrar(); else { focoTopo = 1; topoCol = G_TOPO_LISTA; } dicaUsou(); } return; }
@@ -4746,11 +4850,13 @@ static void epgPasso(void) {
 // impedem a conta fechada que o modo cartoes usa.
 static float listaYDe(int l, int c) {
   float y = 0.0f;
+  if (gVidro()) return G_L_HEAD + (float)c * G_L_ROW;   // only the open category is on screen
   for (int i = 0; i < l; i++) y += G_L_HEAD + (float)linhaN(i) * G_L_ROW;
   return y + G_L_HEAD + (float)c * G_L_ROW;
 }
 static float listaAltura(void) {
   float y = 0.0f;
+  if (gVidro()) return G_L_HEAD + (float)linhaN(focoLin) * G_L_ROW;
   for (int i = 0; i < nLinhas(); i++) y += G_L_HEAD + (float)linhaN(i) * G_L_ROW;
   return y;
 }
@@ -6155,7 +6261,7 @@ static void desenharGrupos(float a) {
 // caminho de sempre. Gaveta, busca e painel sao camadas (so elas valem
 // enquanto abertas), e so com a animacao assentada.
 static int buscaEstado;   // declarada de novo com a busca, mais abaixo
-static int guiaCamadaAberta(void) { return catAberto || buscaEstado || painel || limparConfirm || opcoesAberto; }
+static int guiaCamadaAberta(void) { return catAberto || buscaEstado || painel || limparConfirm || opcoesAberto || vpAberto; }
 #ifdef NV_TOUCH_UI
 static int guiaVazioTelefone(void) {
   return telefoneui_ativo() && aberta && !overlay && !nCanais &&
@@ -7586,7 +7692,13 @@ static void toqueGuiaRetomar(void) {
     }
     toquerol_limpar(&toqueAddon); return;
   }
-  if (toquerol_livre(&toqueLista) && nLinhas() > 0) {
+  if (toquerol_livre(&toqueLista) && nLinhas() > 0 && gVidro()) {
+    float ponto = rolL + toqueLista.regiao.h * 0.35f;
+    focoCol = (int)((ponto - G_L_HEAD) / G_L_ROW);
+    if (focoCol >= linhaN(focoLin)) focoCol = linhaN(focoLin) - 1;
+    if (focoCol < 0) focoCol = 0;
+    focoTopo = 0;
+  } else if (toquerol_livre(&toqueLista) && nLinhas() > 0) {
     float ponto = rolL + toqueLista.regiao.h * 0.35f, y = 0.0f;
     for (int l = 0; l < nLinhas(); l++) {
       float h = G_L_HEAD + linhaN(l) * G_L_ROW;
@@ -7650,6 +7762,216 @@ static void gTemaPasso(void) {
   else if (G_TEMAS[t].fr < 0) { alvo[0] = NV_COR_FUNDO_R; alvo[1] = NV_COR_FUNDO_G; alvo[2] = NV_COR_FUNDO_B; }
   else { alvo[0] = G_TEMAS[t].fr; alvo[1] = G_TEMAS[t].fg; alvo[2] = G_TEMAS[t].fb; }
   for (int k = 0; k < 3; k++) gFundo[k] += (alvo[k] - gFundo[k]) * 0.07f;
+}
+
+
+// --- LIVE TV OPTIONS PANEL ------------------------------------------------------
+// RIGHT on a channel (or the Options chip) slides a glass panel in on the
+// right: "This channel" (favourite, hide) and "Live TV" (preview, theme, sort,
+// server, refresh, and showing hidden channels again when there are some).
+enum { VP_FAV, VP_OCULTAR, VP_PREVIA, VP_TEMA, VP_ORDEM, VP_SERVIDOR, VP_ATUALIZAR, VP_MOSTRAR, VP_N };
+#define G_VP_W     600.0f
+#define G_VP_ITEM   66.0f
+#define G_VP_SEC    46.0f
+static float vpAnim;
+static Uint32 vpAviso; static char vpAvisoTxt[96];
+// The focused channel's IPTV account and its server list (none: no row).
+static int vpServidores(IptvReservas *r, int *tipo) {
+  GCanal *c = linhaItem(focoLin, focoCol);
+  unsigned id = 0;
+  char principal[16];
+  if (!c || c->fonte < 0 || c->fonte >= nLtvF || !fonteConta(&ltvF[c->fonte], &id)) return 0;
+  *tipo = ltvF[c->fonte].tipo;
+  if (*tipo == LTV_XTREAM) { xtream_fonte_selecionar(id); return xtream_reservas_ler(r, principal, sizeof principal) && r->n > 0; }
+  if (*tipo == LTV_M3U) { m3u_fonte_selecionar(id); return m3u_reservas_ler(r, principal, sizeof principal) && r->n > 0; }
+  if (*tipo == LTV_STALKER) { stalker_fonte_selecionar(id); return stalker_reservas_ler(r, principal, sizeof principal) && r->n > 0; }
+  return 0;
+}
+static int vpItens(int *it) {
+  int n = 0, tipo;
+  IptvReservas r;
+  if (linhaItem(focoLin, focoCol)) { it[n++] = VP_FAV; it[n++] = VP_OCULTAR; }
+  it[n++] = VP_PREVIA; it[n++] = VP_TEMA; it[n++] = VP_ORDEM;
+  if (vpServidores(&r, &tipo)) it[n++] = VP_SERVIDOR;
+  it[n++] = VP_ATUALIZAR;
+  ocultosCanaisGarantir();
+  if (nOcC > 0) it[n++] = VP_MOSTRAR;
+  return n;
+}
+static void vpAbrir(void) {
+  int it[VP_N];
+  vpAberto = 1; vpFoco = 0; focoTopo = 0; okDesde = 0; dirSeg = 0;
+  (void)vpItens(it);
+}
+static void vpNota(const char *t) { snprintf(vpAvisoTxt, sizeof vpAvisoTxt, "%s", t); vpAviso = SDL_GetTicks(); if (!vpAviso) vpAviso = 1; }
+static int vpUsar(IptvReservas *r, const char *principal, void *u) { (void)principal; return iptvres_definir_ativo(r, *(int *)u); }
+static const char *vpOrdemNome(int o) {
+  return i18n(o == 1 ? "A–Z" : o == 2 ? "Ordem do provedor" : "Por número");
+}
+static void vpServidorNome(const IptvReservas *r, char *out, size_t n) {
+  if (r->ativo <= 0) snprintf(out, n, "%s", i18n("Principal"));
+  else snprintf(out, n, i18n("Reserva %d"), r->ativo);
+}
+// direction: 0 = OK, +1/-1 = Left/Right on a value row.
+static void vpAgir(int item, int dir) {
+  GCanal *c = linhaItem(focoLin, focoCol);
+  switch (item) {
+    case VP_FAV:
+      if (c) { favAlternar(c); vpNota(c->fav ? i18n("Adicionado aos favoritos") : i18n("Removido dos favoritos")); }
+      break;
+    case VP_OCULTAR:
+      if (c && nOcC < G_MAX_OCULTOS) {
+        ocultoChave(c, ocC[nOcC], sizeof ocC[0]); nOcC++;
+        ocultosCanaisGravar(); vistaMontar(); focoValido();
+        vpAberto = 0;
+        printf("[ltv] canal oculto (%d no total)\n", nOcC); fflush(stdout);
+      }
+      break;
+    case VP_MOSTRAR:
+      nOcC = 0; ocultosCanaisGravar(); vistaMontar(); focoValido();
+      vpNota(i18n("Canais ocultos de volta à lista")); vpFoco = 0;
+      break;
+    case VP_PREVIA:
+      previewLigado = !previewLigado; previewGravar();
+      if (previewLigado) { previewUltLin = previewUltCol = -1; previewFocoMudou = 0; }
+      else previewParar();
+      break;
+    case VP_TEMA:
+      ajustes_definir_ltv_tema((ajustes_ltv_tema() + (dir < 0 ? 4 : 1)) % 5);
+      break;
+    case VP_ORDEM: {
+      char id[96];
+      snprintf(id, sizeof id, "%s", c ? c->id : "");
+      ordemCanais = (ordemCanais + (dir < 0 ? 2 : 1)) % 3; ordemGravar(); vistaMontar();
+      if (id[0]) guia_focar_id(id);
+      focoValido();
+      break; }
+    case VP_SERVIDOR: {
+      IptvReservas r; int tipo = 0, k, ok = 0;
+      char nome[48];
+      if (!vpServidores(&r, &tipo)) break;
+      k = (r.ativo + (dir < 0 ? r.n : 1)) % (r.n + 1);
+      if (tipo == LTV_XTREAM) ok = xtream_reservas_mudar(vpUsar, &k);
+      else if (tipo == LTV_M3U) ok = m3u_reservas_mudar(vpUsar, &k);
+      else if (tipo == LTV_STALKER) ok = stalker_reservas_mudar(vpUsar, &k);
+      if (ok) { r.ativo = k; vpServidorNome(&r, nome, sizeof nome); vpNota(nome); guia_recarregar(0); }
+      break; }
+    case VP_ATUALIZAR:
+      guia_recarregar(0); vpAberto = 0;
+      break;
+  }
+}
+static int vpEvento(SDL_Keycode k, int repeticao) {
+  int it[VP_N], n = vpItens(it);
+  if (vpFoco >= n) vpFoco = n - 1;
+  if (vpFoco < 0) vpFoco = 0;
+  if (k == SDLK_UP)   { if (vpFoco > 0) vpFoco--; return 1; }
+  if (k == SDLK_DOWN) { if (vpFoco + 1 < n) vpFoco++; return 1; }
+  if (k == SDLK_LEFT) {
+    int i = it[vpFoco];
+    if (!repeticao && (i == VP_TEMA || i == VP_ORDEM || i == VP_SERVIDOR)) vpAgir(i, -1);
+    else vpAberto = 0;
+    return 1;
+  }
+  if (k == SDLK_RIGHT) {
+    int i = it[vpFoco];
+    if (!repeticao && (i == VP_TEMA || i == VP_ORDEM || i == VP_SERVIDOR || i == VP_PREVIA)) vpAgir(i, 1);
+    return 1;
+  }
+  if ((k == SDLK_RETURN || k == SDLK_KP_ENTER) && !repeticao) { vpAgir(it[vpFoco], 0); return 1; }
+  return 1;
+}
+#ifdef NV_TOUCH_UI
+static void ponteiroVp(int i, int b) { (void)b; if (vpAberto) vpFoco = i; }
+static void ponteiroVpFora(int a, int b) { (void)a; (void)b; vpAberto = 0; }
+#endif
+static void desenharVp(float a) {
+  int it[VP_N], n, i;
+  GCanal *c = linhaItem(focoLin, focoCol);
+  const GTema *tm = gTema();
+  float fr, fg, fb, x, y, h, e;
+  vpAnim = anim_mola(vpAnim, vpAberto ? 1.0f : 0.0f, 1.0f / 60.0f, 14.0f);
+  if (vpAnim < 0.01f) return;
+  e = vpAnim; a *= e;
+  n = vpItens(it);
+  if (vpFoco >= n) vpFoco = n - 1;
+  gCorFundo(&fr, &fg, &fb);
+  // Veil over the rest of the screen; the panel slides in from the right.
+  gfx_cor((GfxRect){ 0, 0, NV_TELA_W, NV_TELA_H }, 0.0f, fr * 0.6f, fg * 0.6f, fb * 0.6f, 0.55f * a);
+  h = 150.0f + (float)n * G_VP_ITEM + 2.0f * G_VP_SEC + 40.0f;
+  if (!c) h -= 150.0f + G_VP_SEC;
+  x = NV_TELA_W - NV_MARGEM_X - G_VP_W + (1.0f - e) * 80.0f;
+  y = (NV_TELA_H - h) * 0.5f;
+#ifdef NV_TOUCH_UI
+  ponteiro_camada();
+  ponteiro_alvo(0, 0, NV_TELA_W, NV_TELA_H, NULL, ponteiroVpFora, 0, 0);
+#endif
+  { GfxRect pn = { x, y, G_VP_W, h };
+    gfx_cor(pn, 28.0f / h, fminf(1.0f, fr + 0.085f), fminf(1.0f, fg + 0.085f), fminf(1.0f, fb + 0.09f), a);
+#ifdef NV_TOUCH_UI
+    ponteiro_alvo(pn.x, pn.y, pn.w, pn.h, NULL, NULL, 0, 0);
+#endif
+  }
+  x += 24.0f; y += 24.0f;
+  if (c) {
+    char meta[200];
+    GfxRect lg = { x, y + 8.0f, 96.0f, 56.0f };
+    gfx_cor(lg, 0.2f, 1, 1, 1, 0.08f * a);
+    logoNaCaixa(c, (GfxRect){ lg.x + 6.0f, lg.y + 4.0f, lg.w - 12.0f, lg.h - 8.0f }, 80.0f, 44.0f, G_LOGO_CLARO, a);
+    { TxtLinha t = txt_linha_corta(TXT_CW_TITULO, c->nome, 246, 247, 250, 255, G_VP_W - 48.0f - 116.0f);
+      TxtLinha m;
+      snprintf(meta, sizeof meta, "%s  \xc2\xb7  %d", c->cat >= 0 ? i18n(cats[c->cat].nome) : "", c->numero);
+      m = txt_linha_corta(TXT_DET_META2, meta, 170, 165, 168, 255, G_VP_W - 48.0f - 116.0f);
+      txt_desenhar_alpha(t, x + 116.0f, y + 6.0f, a);
+      txt_desenhar_alpha(m, x + 116.0f, y + 12.0f + (float)t.h, a); }
+    y += 96.0f;
+  }
+  for (i = 0; i < n; i++) {
+    int foc = i == vpFoco;
+    const char *ico = "", *rot = "", *val = NULL;
+    char vbuf[64];
+    if (i == 0 && c) {
+      TxtLinha sc = txt_linha(TXT_PG_ROTULO, i18n("Este canal"), 165, 160, 165, 255);
+      txt_desenhar_alpha(sc, x + 4.0f, y + G_VP_SEC - 12.0f - (float)sc.h, a); y += G_VP_SEC;
+    }
+    if (it[i] == VP_PREVIA) {
+      TxtLinha sc = txt_linha(TXT_PG_ROTULO, i18n("TV ao vivo"), 165, 160, 165, 255);
+      txt_desenhar_alpha(sc, x + 4.0f, y + G_VP_SEC - 12.0f - (float)sc.h, a); y += G_VP_SEC;
+    }
+    switch (it[i]) {
+      case VP_FAV: ico = "aj_star"; rot = c && c->fav ? i18n("Remover dos favoritos") : i18n("Adicionar aos favoritos"); break;
+      case VP_OCULTAR: ico = "aj_eye-off"; rot = i18n("Ocultar este canal"); break;
+      case VP_PREVIA: ico = "aj_circle-play"; rot = i18n("Prévia"); val = previewLigado ? i18n("Ligada") : i18n("Desligada"); break;
+      case VP_TEMA: ico = "aj_palette"; rot = i18n("Tema"); val = ajustes_ltv_tema_nome(ajustes_ltv_tema()); break;
+      case VP_ORDEM: ico = "aj_arrow-up-down"; rot = i18n("Ordenar canais"); val = vpOrdemNome(ordemCanais); break;
+      case VP_SERVIDOR: { IptvReservas r; int tipo; ico = "aj_server"; rot = i18n("Servidor");
+        if (vpServidores(&r, &tipo)) { vpServidorNome(&r, vbuf, sizeof vbuf); val = vbuf; } break; }
+      case VP_ATUALIZAR: ico = "aj_rotate-ccw-clock"; rot = i18n("Atualizar lista de canais"); break;
+      case VP_MOSTRAR: ico = "aj_eye"; snprintf(vbuf, sizeof vbuf, i18n("Mostrar canais ocultos (%d)"), nOcC); rot = vbuf; break;
+    }
+    { GfxRect r = { x - 8.0f, y, G_VP_W - 32.0f, G_VP_ITEM - 6.0f };
+      int ct = foc ? tm->tr : 236, cg = foc ? tm->tg : 236, cb = foc ? tm->tb : 240;
+      TxtLinha t, v;
+      float vw = 0.0f;
+      if (foc) gfx_cor(r, 16.0f / r.h, tm->pr, tm->pg, tm->pb, a);
+#ifdef NV_TOUCH_UI
+      ponteiro_alvo(r.x, r.y, r.w, r.h, ponteiroVp, NULL, i, 0);
+#endif
+      gfx_icone((GfxRect){ r.x + 18.0f, r.y + (r.h - 28.0f) * 0.5f, 28.0f, 28.0f }, ico,
+                ct / 255.0f, cg / 255.0f, cb / 255.0f, a);
+      if (val) {
+        v = txt_linha(TXT_DET_META2, val, foc ? ct : 175, foc ? cg : 170, foc ? cb : 175, 255);
+        vw = (float)v.w;
+        txt_desenhar_alpha(v, r.x + r.w - 18.0f - vw, r.y + (r.h - (float)v.h) * 0.5f, a);
+      }
+      t = txt_linha_corta(TXT_BODY, rot, ct, cg, cb, 255, r.w - 70.0f - vw - 30.0f);
+      txt_desenhar_alpha(t, r.x + 62.0f, r.y + (r.h - (float)t.h) * 0.5f, a); }
+    y += G_VP_ITEM;
+  }
+  if (vpAviso && SDL_GetTicks() - vpAviso < 2200u) {
+    TxtLinha t = txt_linha(TXT_DET_META2, vpAvisoTxt, 200, 200, 205, 255);
+    txt_desenhar_alpha(t, x + 4.0f, y + 8.0f, a);
+  }
 }
 
 void guia_desenhar(Uint32 agora) {
@@ -7775,6 +8097,7 @@ void guia_desenhar(Uint32 agora) {
         int n = linhaN(l);
         float dim = 1.0f;
         float bloco = G_L_HEAD + (float)n * G_L_ROW;
+        if (gVidro() && l != focoLin) continue;   // GLASS LIST: only the open category
         if (y > G_L_BASE) break;
         if (y + bloco < G_L_TOPO - 8.0f) { y += bloco; continue; }
         // Cabecalho de categoria DISCRETO: 22 px em cinza. A categoria e
@@ -7783,7 +8106,8 @@ void guia_desenhar(Uint32 agora) {
           char cab[140];
           int at = 0;
           TxtLinha t;
-          snprintf(cab, sizeof cab, "%s  \xc2\xb7  %d", linhaNome(l), n);
+          if (gVidro()) snprintf(cab, sizeof cab, "%s  \xc2\xb7  %d / %d", linhaNome(l), focoCol + 1, n);
+          else snprintf(cab, sizeof cab, "%s  \xc2\xb7  %d", linhaNome(l), n);
           t = txt_linha_corta(TXT_PG_ROTULO, cab, at ? 255 : 150, at ? 255 : 153,
                               at ? 255 : 162, 255, gVidro() ? G_V_LISTA_W : G_L_COL);
           txt_desenhar_alpha(t, G_AREA_X + 4.0f, y + G_L_HEAD - 12.0f - (float)t.h, a * dim);
@@ -7974,7 +8298,7 @@ void guia_desenhar(Uint32 agora) {
       ? (overlay
          ? GUIA_FECHA_L
          : NV_GUIA_SO_CANAIS
-         ? i18n("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai")
+         ? i18n("OK assiste  ·  \xe2\x86\x90 categorias  ·  \xe2\x86\x92 opções  ·  Voltar sai")
          : i18n("OK assiste  ·  segure OK = opções  ·  \xe2\x86\x90\xe2\x86\x92 adianta a grade  ·  \xe2\x86\x91 fontes  ·  Voltar sai"))
       : (overlay
          ? GUIA_FECHA_G
@@ -8005,6 +8329,7 @@ void guia_desenhar(Uint32 agora) {
     }
   }
   desenharOpcoes(a);
+  desenharVp(a);
   desenharPainelCategorias(a);
   buscaDesenhar(agora);
   if (painel) { if (paModo == 1) desenharPainelFiltros(a); else desenharPainelAddons(a); }

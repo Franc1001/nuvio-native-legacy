@@ -3832,6 +3832,8 @@ int   ajustes_livetv_modo(void)       { return valor[AJ_LIVETV_MODO]; }
 int   ajustes_livetv_proxy(void)      { return lig(AJ_LIVETV_PROXY); }
 int   ajustes_livetv_sugerir(void)    { return lig(AJ_LIVETV_SUGERIR); }
 int   ajustes_ltv_tema(void) { int v = valor[AJ_LTV_TEMA]; return v >= 0 && v < 5 ? v : 0; }
+void  ajustes_definir_ltv_tema(int v) { valor[AJ_LTV_TEMA] = v >= 0 && v < 5 ? v : 0; AJ_COM_ORIGEM(AJLOG_CENTRAL, gravar()); }
+const char *ajustes_ltv_tema_nome(int v) { return i18n(V_LTV_TEMA[v >= 0 && v < 5 ? v : 0]); }
 void  ajustes_livetv_aplicar_proxy(int l) { valor[AJ_LIVETV_PROXY] = l ? 0 : 1; AJ_COM_ORIGEM(AJLOG_CENTRAL, gravar()); }
 void  ajustes_livetv_aplicar_modo(int m) { if (m >= 0 && m < 3) { valor[AJ_LIVETV_MODO] = m; AJ_COM_ORIGEM(AJLOG_CENTRAL, gravar()); } }
 unsigned ajustes_livetv_espera_ms(void) {

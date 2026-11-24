@@ -14,8 +14,16 @@
 
 // --- dubles ----------------------------------------------------------------
 static char disco[2048]; static int temDisco;
-char *dados_ler(const char *nome) { (void)nome; return temDisco ? strdup(disco) : NULL; }
-int dados_gravar(const char *nome, const char *c) { (void)nome; snprintf(disco, sizeof disco, "%s", c); temDisco = 1; return 1; }
+// The kept category names (xtream-cats-*) live in their own "file".
+static char discoCats[4096]; static int temCats;
+char *dados_ler(const char *nome) {
+  if (nome && !strncmp(nome, "xtream-cats-", 12)) return temCats ? strdup(discoCats) : NULL;
+  return temDisco ? strdup(disco) : NULL;
+}
+int dados_gravar(const char *nome, const char *c) {
+  if (nome && !strncmp(nome, "xtream-cats-", 12)) { snprintf(discoCats, sizeof discoCats, "%s", c); temCats = 1; return 1; }
+  snprintf(disco, sizeof disco, "%s", c); temDisco = 1; return 1;
+}
 int dados_apagar(const char *nome) { (void)nome; temDisco = 0; disco[0] = 0; return 1; }
 int perfis_ativo(void) { return 1; }
 static int prefFormato;
@@ -31,7 +39,7 @@ static const char *respStreams =
   " {\"num\":3,\"name\":\"\",\"stream_id\":303,\"category_id\":\"5\"},"
   " {\"num\":4,\"name\":\"Sem categoria\",\"stream_id\":404}]";
 static const char *respAuth0 = "{\"user_info\":{\"auth\":0,\"status\":\"Disabled\"}}";
-static int recusar, mudo, statusHttp = 200, pagina, semFormatos, soTs;
+static int recusar, mudo, statusHttp = 200, pagina, semFormatos, soTs, catsFalham;
 static char ultimaUrl[1200];      // a url DO PAINEL (desfeito o proxy)
 static char ultimaPedida[4000];   // o endereco que a rede recebeu de fato
 static char ultimoCorpo[1200];    // o corpo do POST ao proxy (Tizen)
@@ -107,7 +115,7 @@ static char *responder(const char *url) {
   if (mudo) return NULL;
   if (pagina) return strdup("<!DOCTYPE html><html><title>Just a moment...</title>[x]</html>");
   if (recusar || (hostRecusa[0] && strstr(ultimaUrl, hostRecusa))) return strdup(respAuth0);
-  if (strstr(ultimaUrl, "action=get_live_categories")) return strdup(respCats);
+  if (strstr(ultimaUrl, "action=get_live_categories")) return catsFalham ? strdup("") : strdup(respCats);
   if (strstr(ultimaUrl, "action=get_live_streams")) return strdup(respStreams);
   if (strstr(ultimaUrl, "action=get_short_epg")) return strdup(respEpg);
   if (!strstr(ultimaUrl, "action="))
@@ -302,6 +310,14 @@ int main(void) {
   assert(!strcmp(c[2].id, "xtream:404") && !strcmp(c[2].categoria, "Outros"));
   assert(strstr(ultimaUrl, "username=joao%40x&password=s%26nha%201&action=get_live_streams"));
   puts("ok  canais: id numero ou texto, categoria por id, sem categoria = Outros");
+  // The panel fails get_live_categories (three tries) but sends the streams:
+  // the names kept from the last good answer still group the channels.
+  assert(temCats && strstr(discoCats, "5\tEsportes\n"));
+  catsFalham = 1;
+  n = xtream_canais(c, 16);
+  assert(n == 3 && !strcmp(c[0].categoria, "Esportes") && !strcmp(c[1].categoria, "Not\xc3\xad" "cias"));
+  catsFalham = 0;
+  puts("ok  categorias: painel sem resposta usa as guardadas do ultimo acerto");
 #ifdef NV_XTREAM_PROXY_TESTE
   // Tizen: painel http vai pelo worker, com a url INTEIRA escapada num
   // parametro so (o & da senha nao pode virar outro parametro do worker).

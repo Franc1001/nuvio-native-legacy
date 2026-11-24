@@ -513,7 +513,76 @@ static int compararCategorias(const void *aa, const void *bb) {
   int c = strcmp(a->id, b->id);
   return c ? c : (a->ordem > b->ordem) - (a->ordem < b->ordem);
 }
+// THE ACCOUNT'S CATEGORY NAMES, kept on the device (this fork). Busy panels
+// sometimes fail get_live_categories while get_live_streams works; then every
+// channel had no category and the guide grouped 21,000 channels into ten
+// generic sections. The last good answer ("id TAB name" per line, in panel
+// order) stands in until the panel answers again.
+static const char *arquivoCats(void) {
+  static _Thread_local char nome[64];
+  if (contexto()->sid) snprintf(nome, sizeof nome, "xtream-cats-p%d-s%u.txt", perfis_ativo(), contexto()->sid);
+  else snprintf(nome, sizeof nome, "xtream-cats-p%d.txt", perfis_ativo());
+  return nome;
+}
+static void catsGravar(const XtCat *cats, int n) {
+  size_t cap = (size_t)n * (sizeof cats[0].id + sizeof cats[0].nome + 2) + 1, k = 0;
+  char *t = malloc(cap);
+  if (!t) return;
+  t[0] = 0;
+  for (int o = 0; o < n; o++)            // cats is still in panel order here
+    k += (size_t)snprintf(t + k, cap - k, "%s\t%s\n", cats[o].id, cats[o].nome);
+  dados_gravar(arquivoCats(), t);
+  free(t);
+}
+static XtCat *catsLer(int *quantos) {
+  char *t = dados_ler(arquivoCats()), *q;
+  XtCat *cats = NULL;
+  int n = 0, cap = 0;
+  *quantos = 0;
+  for (q = t; q && *q; ) {
+    size_t len = strcspn(q, "\n");
+    char *tab = memchr(q, '\t', len);
+    if (tab && tab > q) {
+      XtCat c = {0};
+      snprintf(c.id, sizeof c.id, "%.*s", (int)(tab - q), q);
+      snprintf(c.nome, sizeof c.nome, "%.*s", (int)(q + len - tab - 1), tab + 1);
+      if (n == cap) {
+        XtCat *no = realloc(cats, (size_t)(cap = cap ? cap * 2 : 64) * sizeof *cats);
+        if (!no) break;
+        cats = no;
+      }
+      c.ordem = n; cats[n++] = c;
+    }
+    q += len; if (*q) q++;
+  }
+  free(t);
+  *quantos = n;
+  return cats;
+}
+static XtCat *lerCategoriasUma(int *quantos, NvPerfilSessao sessao);
 static XtCat *lerCategorias(int *quantos, NvPerfilSessao sessao) {
+  XtCat *cats = NULL;
+  // Up to three tries, a short pause between them: the panel is often only
+  // briefly overloaded.
+  for (int t = 0; t < 3 && nv_perfil_sessao_atual(sessao); t++) {
+    time_t ini = time(NULL);
+    if (t) { struct timespec d = { 1 + t, 0 }; nanosleep(&d, NULL);
+             printf("[xtream] categorias: tentativa %d\n", t + 1); fflush(stdout); }
+    cats = lerCategoriasUma(quantos, sessao);
+    if (*quantos > 0) return cats;
+    free(cats); cats = NULL;
+    if (time(NULL) - ini >= 10) break;   // no answer at all: the server is down, don't wait more
+  }
+  cats = catsLer(quantos);
+  if (*quantos > 1) {
+    XtCat *tmp = cats;
+    qsort(tmp, (size_t)*quantos, sizeof *tmp, compararCategorias);
+  }
+  printf("[xtream] categorias nao vieram do painel; usando as %d guardadas\n", *quantos);
+  fflush(stdout);
+  return cats;
+}
+static XtCat *lerCategoriasUma(int *quantos, NvPerfilSessao sessao) {
   char *corpo = chamar("get_live_categories", sessao);
   const char *p = corpo ? js_raiz_array(corpo) : NULL;
   XtCat *cats = NULL;
@@ -538,6 +607,7 @@ static XtCat *lerCategorias(int *quantos, NvPerfilSessao sessao) {
     p = js_prox(fim);
   }
   free(corpo);
+  if (n > 0) catsGravar(cats, n);
   if (n > 1) qsort(cats, (size_t)n, sizeof *cats, compararCategorias);
   *quantos = n;
   return cats;

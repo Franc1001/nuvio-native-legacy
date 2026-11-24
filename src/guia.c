@@ -133,6 +133,13 @@ static int gRetrato(void) {
 static float gTopoFim = 80.0f;
 static void gTopoMedir(void);
 static float gPreviewLargura(void);
+// GLASS LIST (NV_GUIA_SO_CANAIS on a landscape screen, this fork): channel
+// names on the left, a large rounded live preview on the right with the
+// channel's name under it. No programme guide. Defined after modoLista.
+static int gVidro(void);
+#define G_V_TOPO     208.0f
+#define G_V_PREVIEW  960.0f
+#define G_V_VAO       64.0f
 #define G_HERO_Y   (gRetrato() ? gTopoFim + 60.0f : 204.0f)
 // PREVIEW: 800x450 e 41,7% da largura, 16:9 exato. Os MESMOS numeros furam a
 // superficie GL (desenharHero) e posicionam o plano de video (a sessao "mini
@@ -140,10 +147,12 @@ static float gPreviewLargura(void);
 // so, senao o furo e o video desencontram.
 #define G_PREVIEW_W gPreviewLargura()
 #define G_PREVIEW_H (G_PREVIEW_W * (9.0f / 16.0f))
-#define G_PREVIEW_X (gRetrato() ? G_AREA_X + (G_AREA_W - G_PREVIEW_W) * 0.5f : NV_TELA_W - G_PREVIEW_W)
+#define G_PREVIEW_X (gRetrato() ? G_AREA_X + (G_AREA_W - G_PREVIEW_W) * 0.5f : gVidro() ? NV_TELA_W - NV_MARGEM_X - G_PREVIEW_W : NV_TELA_W - G_PREVIEW_W)
 #define G_INFO_H    450.0f
-#define G_PREVIEW_Y (gRetrato() ? G_HERO_Y + G_INFO_H + 24.0f : 0.0f)
-#define G_PREVIEW_RAIO (gRetrato() ? 16.0f : 0.0f)          // px; vira fracao do menor lado no uso
+#define G_PREVIEW_Y (gRetrato() ? G_HERO_Y + G_INFO_H + 24.0f : gVidro() ? G_V_TOPO : 0.0f)
+#define G_PREVIEW_RAIO (gRetrato() ? 16.0f : gVidro() ? 28.0f : 0.0f)          // px; vira fracao do menor lado no uso
+// Glass list: the channel column ends G_V_VAO before the preview.
+#define G_V_LISTA_W (G_PREVIEW_X - G_V_VAO - G_AREA_X)
 // Ficha do canal a esquerda do preview, com 48 de respiro ate ele.
 #define G_INFO_X   G_AREA_X
 #define G_INFO_W   (gRetrato() ? G_AREA_W : G_PREVIEW_X - 48.0f - G_INFO_X)
@@ -174,7 +183,7 @@ static float gPreviewLargura(void);
 // Regua de horas em G_TOPO; as linhas comecam 42 px abaixo dela. Coluna de
 // canal com 400 px: numero (48) + logo numa caixa de 84x44 + nome em
 // TXT_CW_TITULO (28 px). O resto, 1352 px, e a faixa de tempo.
-#define G_L_TOPO    (G_TOPO + 42.0f)
+#define G_L_TOPO    (gVidro() ? G_V_TOPO : G_TOPO + 42.0f)
 // Linha de 80 (celula de 72 + 8 de vao): titulo de 28 e horario de 23 em
 // duas linhas cabem com folga, e sobram CINCO canais visiveis abaixo do
 // heroi — o numero dos guias de referencia com preview grande.
@@ -189,7 +198,7 @@ static float gPreviewLargura(void);
 #define G_L_JANELA_MIN (gRetrato() ? 60 : 120)
 #define G_L_PASSO_MIN   30     // regua de meia em meia hora, como toda grade
 #define G_L_DESL_MAX   180     // ate 3 h a frente com DIREITA
-#define G_L_BASE    (NV_TELA_H - (gRetrato() ? 62.0f : 0.0f))
+#define G_L_BASE    (NV_TELA_H - (gRetrato() ? 62.0f : gVidro() ? 84.0f : 0.0f))
 #define G_L_FADE     36.0f     // esmaecimento nas bordas da area rolavel
 
 // --- cabecalho: chips de modo, addons e preview -----------------------------
@@ -202,6 +211,7 @@ static float gPreviewLargura(void);
 #define G_CHIP_PAD   20.0f
 #define G_CHIP_TEXTO (gRetrato() ? TXT_V2_SEG : TXT_PG_ROTULO)
 static float gPreviewLargura(void) {
+  if (gVidro()) return G_V_PREVIEW;
   if (!gRetrato()) return 992.0f;   // 558 px high: same grid position, art reaches top/right.
   // A regua, uma categoria e tres canais continuam visiveis mesmo quando
   // os controles traduzidos ocupam mais linhas. O video conserva 16:9.
@@ -830,6 +840,8 @@ static void favAlternar(GCanal *c) {
 // 1 = lista, 0 = cartoes. Persistido por perfil: quem escolheu lista
 // espera reabrir em lista, senao a escolha vira um gesto a repetir por sessao.
 static int modoLista, modoLido;
+static int overlay;
+static int gVidro(void) { return NV_GUIA_SO_CANAIS && modoLista && !overlay && !gRetrato(); }
 
 static void modoLer(void) {
   char *t = lerPerfil("modo");
@@ -5451,16 +5463,16 @@ static void desenharHero(float a, time_t agoraT, time_t tFoco) {
   if (sessao && focado && !anda && video_pronto() && !player_carregando()) {
     gfx_furo_raio(pv, raio);
     // Selo sobre o video: GL opaco por cima do furo aparece por cima do plano.
-    { float badgeX = pv.x + (gRetrato() ? 20.0f : 240.0f);
-      float badgeY = pv.y + pv.h - (gRetrato() ? 52.0f : 180.0f);
+    { float badgeX = pv.x + (gRetrato() || gVidro() ? 24.0f : 240.0f);
+      float badgeY = pv.y + pv.h - (gRetrato() ? 52.0f : gVidro() ? 60.0f : 180.0f);
       guia_selo_ao_vivo(badgeX, badgeY, a); }
   } else if (anda && focado) {
     // encolhendo: nada aqui, o furo do degrau vem por cima de tudo
   } else {
     if (gRetrato()) gfx_vidro_ou_solido(pv, raio, GFX_VIDRO_DENS, a, 0.078f, 0.080f, 0.088f, 1.0f);
-    else gfx_cor(pv, 0, 0.078f, 0.080f, 0.088f, a);
+    else gfx_cor(pv, gVidro() ? raio : 0, 0.078f, 0.080f, 0.088f, a);
     // Uma luz so, bem fraca, na cor de realce: tira a cara de caixa vazia.
-    if (!ajustes_vidro()) gfx_luz_canto(pv, raio, pv.w * 0.82f, -pv.h * 0.2f, pv.w * 0.85f,
+    if (!ajustes_vidro() && !gVidro()) gfx_luz_canto(pv, raio, pv.w * 0.82f, -pv.h * 0.2f, pv.w * 0.85f,
                   ar, ag, ab, 0.10f * a);
     { float lw = gRetrato() ? fminf(320.0f, pv.w - 40.0f) : 320.0f;
       float lh = gRetrato() ? fminf(170.0f, fmaxf(20.0f, pv.h - 120.0f)) : 170.0f;
@@ -5475,6 +5487,25 @@ static void desenharHero(float a, time_t agoraT, time_t tFoco) {
       txt_desenhar_alpha(t, pv.x + (pv.w - (float)t.w) * 0.5f, pv.y + pv.h - 60.0f, a);
     }
   } }
+  // GLASS LIST: under the rounded preview, only who is on screen: logo, the
+  // channel name, and "category · number". No programme guide.
+  if (gVidro()) {
+    char meta[200];
+    float ix = pv.x + 4.0f, iy = pv.y + pv.h + 28.0f, tx;
+    GfxRect lg = { ix, iy, 96.0f, 56.0f };
+    gfx_cor(lg, 0.2f, 1, 1, 1, 0.07f * ha);
+    logoNaCaixa(c, (GfxRect){ lg.x + 6.0f, lg.y + 4.0f, lg.w - 12.0f, lg.h - 8.0f }, 80.0f, 44.0f, G_LOGO_CLARO, ha);
+    tx = lg.x + lg.w + 22.0f;
+    { TxtLinha n = txt_linha_corta(TXT_TITULO2, c->nome, 246, 247, 250, 255, pv.x + pv.w - tx);
+      snprintf(meta, sizeof meta, "%s  \xc2\xb7  %d", c->cat >= 0 ? i18n(cats[c->cat].nome) : "", c->numero);
+      TxtLinha m = txt_linha_corta(TXT_DET_META2, meta, 150, 153, 162, 255, pv.x + pv.w - tx);
+      float bloco = (float)n.h + 4.0f + (float)m.h;
+      float by = iy + (lg.h - bloco) * 0.5f;
+      txt_desenhar_alpha(n, tx, by, ha);
+      txt_desenhar_alpha(m, tx, by + (float)n.h + 4.0f, ha); }
+    (void)agoraT; (void)tFoco; (void)epg; (void)noAr; (void)proxY; (void)x; (void)w; (void)y;
+    return;
+  }
   if (!gRetrato()) {
     gfx_rect((GfxRect){pv.x, pv.y, 240.0f, pv.h}, 0, GFX_VEU_CSS, 0, 2, 1, 0,
              NV_COR_FUNDO_R, NV_COR_FUNDO_G, NV_COR_FUNDO_B, a);
@@ -5843,7 +5874,9 @@ static void haQuanto(long long quando, char *d, size_t n) {
 }
 
 static void desenharFontes(float a) {
-  float x0 = G_INFO_X, xm = G_INFO_X + G_INFO_W, y = gRetrato() ? G_HERO_Y + G_INFO_H - 112.0f : G_PREVIEW_H - 82.0f, h = 40.0f, x, alvo, xf = 0, wf = 0;
+  float x0 = gVidro() ? G_PREVIEW_X : G_INFO_X, xm = gVidro() ? G_PREVIEW_X + G_PREVIEW_W : G_INFO_X + G_INFO_W,
+        y = gRetrato() ? G_HERO_Y + G_INFO_H - 112.0f : gVidro() ? G_PREVIEW_Y + G_PREVIEW_H + 116.0f : G_PREVIEW_H - 82.0f,
+        h = 40.0f, x, alvo, xf = 0, wf = 0;
   float xs[2 + G_MAX_LTV], ws[2 + G_MAX_LTV];
   char rot[2 + G_MAX_LTV][96];
   int i, n = fontesN(), sel = chipDoFiltro(), tf = ajustes_tinta_foco();
@@ -6490,6 +6523,39 @@ static void desenharLinhaLista(GCanal *c, float y, int focada, float a,
 #endif
   int textoRetrato = gRetrato() && h >= 70.0f;
   float raioB = 10.0f / h;
+  // GLASS LIST ROW: number, logo tile and the channel name, nothing else. The
+  // focused row is a white pill (drawn by the caller) with dark text.
+  if (gVidro()) {
+    float lx = G_AREA_X + 12.0f, wl = G_V_LISTA_W;
+    GfxRect cx = { G_AREA_X + 78.0f, y + (h - 48.0f) * 0.5f, 84.0f, 48.0f };
+    if (alvo) *alvo = (GfxRect){ G_AREA_X, y, wl, h };
+    if (passo == 0) {
+      gfx_cor(cx, 0.22f, focada ? 0.86f : 1.0f, focada ? 0.865f : 1.0f, focada ? 0.88f : 1.0f,
+              (focada ? 1.0f : 0.07f) * a);
+      return;
+    }
+    { char num[16];
+      int cn = focada ? 92 : 132, ct = focada ? 22 : 236;
+      TxtLinha n, t;
+      float nx;
+      snprintf(num, sizeof num, "%d", c->numero);
+      n = txt_linha(TXT_ILHA_HORA, num, cn, cn, cn + 4, 255);
+      txt_desenhar_alpha(n, lx + 44.0f - (float)n.w, y + (h - (float)n.h) * 0.5f, a);
+      logoNaCaixa(c, (GfxRect){ cx.x + 4.0f, cx.y + 4.0f, cx.w - 8.0f, cx.h - 8.0f }, 72.0f, 38.0f, G_LOGO_CLARO, a);
+      nx = cx.x + cx.w + 22.0f;
+      t = txt_linha_corta(TXT_CW_TITULO, c->nome, ct, ct, ct + (focada ? 4 : 2), 255,
+                          G_AREA_X + wl - nx - (c->fav ? 40.0f : 0.0f) - (focada ? 44.0f : 8.0f));
+      txt_desenhar_alpha(t, nx, y + (h - (float)t.h) * 0.5f, a);
+      if (c->fav) {
+        TxtLinha st = txt_linha(TXT_DET_META2, "\xe2\x98\x85", focada ? 200 : 255, focada ? 150 : 214, focada ? 20 : 90, 255);
+        txt_desenhar_alpha(st, G_AREA_X + wl - (focada ? 60.0f : 18.0f) - (float)st.w, y + (h - (float)st.h) * 0.5f, a);
+      }
+      if (focada)
+        gfx_icone((GfxRect){ G_AREA_X + wl - 42.0f, y + (h - 26.0f) * 0.5f, 26.0f, 26.0f }, "play", 0.10f, 0.10f, 0.12f, a);
+    }
+    (void)agoraT; (void)ini; (void)tFoco; (void)agoraX;
+    return;
+  }
   time_t fimJ = ini + (time_t)G_L_JANELA_MIN * 60;
   float ppm = G_L_FAIXA_W / (float)G_L_JANELA_MIN;
   GfxRect col = { G_AREA_X, y, G_L_COL, h };
@@ -7547,7 +7613,7 @@ void guia_desenhar(Uint32 agora) {
   if (temLinhas) {
     float area = G_L_BASE - (modoLista ? G_L_TOPO : G_TOPO);
     if (modoLista) {
-      toquerol_vincular(&toqueLista, (GfxRect){ G_AREA_X, G_L_TOPO, G_AREA_W, area }, gfx_escala(), 0.0f, fmaxf(0.0f, listaAltura() + G_L_FADE - area), 1, &rolL);
+      toquerol_vincular(&toqueLista, (GfxRect){ G_AREA_X, G_L_TOPO, gVidro() ? G_V_LISTA_W : G_AREA_W, area }, gfx_escala(), 0.0f, fmaxf(0.0f, listaAltura() + G_L_FADE - area), 1, &rolL);
       if (!toquerol_livre(&toqueTempo)) toqueTempoMin = (float)janelaDesl;
       toquePpm = G_L_FAIXA_W / G_L_JANELA_MIN;
       toquerol_vincular(&toqueTempo, (GfxRect){ G_L_FAIXA_X, G_TOPO, G_L_FAIXA_W, G_L_BASE - G_TOPO }, gfx_escala(), 0.0f, G_L_DESL_MAX, 0, &toqueTempoMin);
@@ -7644,7 +7710,7 @@ void guia_desenhar(Uint32 agora) {
     if (fimY > G_L_BASE) fimY = G_L_BASE;
     // Rows share the page surface and extend through the screen edges.
     if (!NV_GUIA_SO_CANAIS) desenharRegua(a, ini);
-    gfx_recorte(0.0f, G_L_TOPO - 8.0f, NV_TELA_W, G_L_BASE - G_L_TOPO + 8.0f);
+    gfx_recorte(0.0f, G_L_TOPO - 8.0f, gVidro() ? G_AREA_X + G_V_LISTA_W + 30.0f : NV_TELA_W, G_L_BASE - G_L_TOPO + 8.0f);
     for (passo = 0; passo < 2; passo++) {
       float y = G_L_TOPO - rolL;
       for (l = 0; l < nLinhas(); l++) {
@@ -7661,7 +7727,7 @@ void guia_desenhar(Uint32 agora) {
           TxtLinha t;
           snprintf(cab, sizeof cab, "%s  \xc2\xb7  %d", linhaNome(l), n);
           t = txt_linha_corta(TXT_PG_ROTULO, cab, at ? 255 : 150, at ? 255 : 153,
-                              at ? 255 : 162, 255, G_L_COL);
+                              at ? 255 : 162, 255, gVidro() ? G_V_LISTA_W : G_L_COL);
           txt_desenhar_alpha(t, G_AREA_X + 4.0f, y + G_L_HEAD - 12.0f - (float)t.h, a * dim);
         }
         y += G_L_HEAD;
@@ -7670,8 +7736,22 @@ void guia_desenhar(Uint32 agora) {
           GfxRect alvo;
           if (y + G_L_ROW < G_L_TOPO - 8.0f || y > G_L_BASE) continue;
           if (passo == 0 && a > 0.99f)
-            ponteiro_alvo_faixa(G_AREA_X - 14.0f, y - 4.0f, G_AREA_W + 28.0f, G_L_CEL + 8.0f,
+            ponteiro_alvo_faixa(G_AREA_X - 14.0f, y - 4.0f, (gVidro() ? G_V_LISTA_W : G_AREA_W) + 28.0f, G_L_CEL + 8.0f,
                                 G_L_TOPO - 8.0f, G_L_BASE, ponteiroCanal, NULL, l, i);
+          if (gVidro()) {
+            // Rows fade with their distance from the focused one, like tvOS.
+            int d = l == focoLin ? abs(i - focoCol) : 6;
+            float dimV = foc ? 1.0f : fmaxf(0.38f, 0.82f - 0.11f * (float)d);
+            if (passo == 0 && foc) {
+              float s = 5.0f;
+              GfxRect pill = { G_AREA_X - 8.0f - s, y - 2.0f - s, G_V_LISTA_W + 16.0f + 2.0f * s, G_L_CEL + 4.0f + 2.0f * s };
+              gfx_cor(pill, 18.0f / pill.h, 0.945f, 0.945f, 0.955f, a);
+            }
+            desenharLinhaLista(linhaItem(l, i), y, foc, a * dimV, agoraT, ini, tFoco,
+                               passo, agoraX, foc ? &alvo : NULL);
+            if (foc && passo == 0) { focoAnelAlvo = alvo; focoAnelAlvo.y += rolL; focoAnelTem = 1; }
+            continue;
+          }
           if (passo == 0) {
             GfxRect row = {0, y - 4.0f, NV_TELA_W, G_L_CEL + 8.0f};
             if (foc) plrui_linha_foco(row, 0.0f, a * dim);
@@ -7698,7 +7778,7 @@ void guia_desenhar(Uint32 agora) {
     (void)agora;
     // Dither the scroll boundary into the page, without stacked alpha strips.
     if (maisAcima)
-      gfx_rect((GfxRect){0, G_L_TOPO - 8.0f, NV_TELA_W, G_L_FADE}, 0, GFX_VEU_CSS, 0, 1, 1, 0,
+      gfx_rect((GfxRect){0, G_L_TOPO - 8.0f, gVidro() ? G_AREA_X + G_V_LISTA_W + 24.0f : NV_TELA_W, G_L_FADE}, 0, GFX_VEU_CSS, 0, 1, 1, 0,
                NV_COR_FUNDO_R, NV_COR_FUNDO_G, NV_COR_FUNDO_B, a);
     gfx_sem_recorte();
     // A cabeca da linha "agora": a hora numa pilula na regua.

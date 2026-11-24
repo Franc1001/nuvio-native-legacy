@@ -97,7 +97,7 @@ static const Item TELA[] = {
   // A escolha da fonte foi para Reproducao (mockup v3, tela 02).
   SEC("Fontes e addons", "Addons, debrid e servidores pessoais", "aj_puzzle"),
     ROT("Addons"),
-      OPC(AJ_ADDONS), OPC(AJ_PLUGINS), OPC(AJ_ADDONS_PRINCIPAL), OPC(AJ_BUSCA_CINEMETA),
+      OPC(AJ_ADDONS), OPC(AJ_ADDON_LOCAL_ADD), OPC(AJ_ADDON_LOCAL_LISTA), OPC(AJ_ADDON_LOCAL_REM), OPC(AJ_PLUGINS), OPC(AJ_ADDONS_PRINCIPAL), OPC(AJ_BUSCA_CINEMETA),
       OPC(AJ_BUSCA_NUVIO), OPC(AJ_BUSCA_ORIGEM),   // #311
     ROT("Falha na reprodução"),
       OPC(AJ_FILTROS_FONTES),

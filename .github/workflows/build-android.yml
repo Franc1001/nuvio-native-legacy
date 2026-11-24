@@ -49,6 +49,7 @@ jobs:
           bash tests/xtream.sh
           bash tests/m3u.sh
           bash tests/catcanalvazio.sh
+          bash tests/addonslocais.sh
 
       - uses: actions/setup-java@v4
         with:

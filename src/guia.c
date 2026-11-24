@@ -2709,7 +2709,10 @@ static Uint32 okDesde; static int okLongo;
 // Descanso do foco antes de pedir o preview. 600 e nao os 350 do fio antigo:
 // agora cada pedido e uma busca de fonte do player, e passar a seta por tres
 // canais nao deve abrir tres buscas.
-#define G_PREVIEW_ESPERA_MS 600u
+// IPTV lines (this fork): 1500. Every preview is a new connection to the
+// provider, and many in a row while scrolling look like abuse to panels that
+// block an address for a while — the list then stops loading on every app.
+#define G_PREVIEW_ESPERA_MS (NV_GUIA_SO_CANAIS ? 1500u : 600u)
 static int      previewPreso;           // canal no ar adotado: nao segue o foco
 static char     previewId[80];          // canal pedido/tocando no preview
 static Uint32   previewFocoMudou;       // quando o foco chegou no canal atual

@@ -39,6 +39,14 @@ static int ultimoPost;
 // Build do teste do Tizen (-DNV_XTREAM_PROXY_TESTE): a chamada chega como
 // POST <NV_REC_URL>/v1/xtream com a url do painel crua no corpo.
 static char *responder(const char *url);
+// Backup servers: a request to a host listed here gets no answer (status 0),
+// and to `hostPagina` an HTTP 200 block page.
+static char hostMorto[2][64], hostPagina[64], hostRecusa[64];
+static int pedidos;
+static int morto(const char *url) {
+  for (int i = 0; i < 2; i++) if (hostMorto[i][0] && strstr(url, hostMorto[i])) return 1;
+  return 0;
+}
 // #158: o chamar() do xtream.c agora usa rede_baixar_st (corpo + status),
 // para o log e a tela saberem se foi 401, 403, 458, 429 ou pagina HTML.
 char *rede_baixar_st(const char *url, int segundos, const char *const *cab, int *status) {
@@ -46,6 +54,9 @@ char *rede_baixar_st(const char *url, int segundos, const char *const *cab, int 
   ultimoPost = 0;
   snprintf(ultimaPedida, sizeof ultimaPedida, "%s", url);
   snprintf(ultimaUrl, sizeof ultimaUrl, "%s", url);
+  pedidos++;
+  if (morto(url)) { if (status) *status = 0; return NULL; }
+  if (hostPagina[0] && strstr(url, hostPagina)) { if (status) *status = 200; return strdup("<html>blocked</html>"); }
   if (status) *status = mudo ? 0 : statusHttp;
   return responder(url);
 }
@@ -61,6 +72,9 @@ char *rede_postar_st(const char *url, int segundos, const char *const *cab,
   snprintf(ultimaPedida, sizeof ultimaPedida, "%s", url);
   snprintf(ultimoCorpo, sizeof ultimoCorpo, "%s", corpo);
   snprintf(ultimaUrl, sizeof ultimaUrl, "%s", corpo);
+  pedidos++;
+  if (morto(corpo)) { if (status) *status = 504; return strdup("{\"erro\":\"painel nao respondeu no prazo\"}"); }
+  if (hostPagina[0] && strstr(corpo, hostPagina)) { if (status) *status = 200; return strdup("<html>blocked</html>"); }
   if (status) *status = mudo ? 504 : statusHttp;
   if (mudo) return strdup("{\"erro\":\"painel nao respondeu no prazo\"}");
   return responder(corpo);
@@ -92,7 +106,7 @@ static char *responder(const char *url) {
   (void)url;
   if (mudo) return NULL;
   if (pagina) return strdup("<!DOCTYPE html><html><title>Just a moment...</title>[x]</html>");
-  if (recusar) return strdup(respAuth0);
+  if (recusar || (hostRecusa[0] && strstr(ultimaUrl, hostRecusa))) return strdup(respAuth0);
   if (strstr(ultimaUrl, "action=get_live_categories")) return strdup(respCats);
   if (strstr(ultimaUrl, "action=get_live_streams")) return strdup(respStreams);
   if (strstr(ultimaUrl, "action=get_short_epg")) return strdup(respEpg);
@@ -142,6 +156,119 @@ static int checkChannel(const XtreamItem *c,void *u) {
   assert(!strcmp(c->categoria,expected) && c->catOrdem==cat);
   assert(c->num==i+1 && c->arquivo && c->arquivoDias==7);
   return !s->stopAfter || s->channels<s->stopAfter;
+}
+
+static int addBackup(IptvReservas *r, const char *principal, void *u) {
+  char n[300];
+  return xtream_normalizar_servidor(u, n, sizeof n) && iptvres_adicionar(r, n, principal);
+}
+static int setActive(IptvReservas *r, const char *principal, void *u) {
+  (void)principal; return iptvres_definir_ativo(r, *(int *)u);
+}
+static int setAuto(IptvReservas *r, const char *principal, void *u) {
+  (void)principal; r->autoTroca = *(int *)u; return 1;
+}
+static void backupServers(void) {
+  XtreamCanal c[16];
+  IptvReservas r;
+  char url[400], principal[300];
+  int k, zero = 0, um = 1;
+  assert(xtream_conta_definir("main.tv:8080", "u", "p"));
+  assert(!xtream_reservas_mudar(addBackup, "main.tv:8080"));        // same as main
+  assert(xtream_reservas_mudar(addBackup, " b1.tv:8080/ "));
+  assert(xtream_reservas_mudar(addBackup, "https://b2.tv"));
+  assert(!xtream_reservas_mudar(addBackup, "B1.tv:8080"));          // duplicate
+  assert(xtream_reservas_ler(&r, principal, sizeof principal) && r.n == 2 && r.ativo == 0 && r.autoTroca);
+  assert(!strcmp(principal, "http://main.tv:8080") && !strcmp(r.url[0], "http://b1.tv:8080"));
+  assert(strstr(disco, "reserva\thttp://b1.tv:8080\nreserva\thttps://b2.tv\n"));
+  puts("ok  reservas: normaliza, recusa repetidas, grava no arquivo da conta");
+
+  // Main up: nothing changes, one request per call.
+  hostMorto[0][0] = hostMorto[1][0] = hostPagina[0] = 0;
+  pedidos = 0;
+  assert(xtream_canais(c, 16) == 3 && pedidos == 3 && strstr(ultimaUrl, "main.tv"));
+  // Main down: the same request goes to b1, which becomes the server in use.
+  snprintf(hostMorto[0], sizeof hostMorto[0], "main.tv");
+  assert(xtream_canais(c, 16) == 3);
+  assert(strstr(ultimaUrl, "://b1.tv:8080/player_api.php"));
+  assert(xtream_reservas_ler(&r, NULL, 0) && r.ativo == 1 && strstr(disco, "reservaAtiva\t1\n"));
+  assert(xtream_url("xtream:9", url, sizeof url) && !strcmp(url, "http://b1.tv:8080/live/u/p/9.m3u8"));
+  { char xm[400]; assert(xtream_url_xmltv(xm, sizeof xm) && !strncmp(xm, "http://b1.tv:8080/xmltv.php?", 28)); }
+  // Next call starts on b1 directly: no time lost on the dead main server.
+  pedidos = 0;
+  assert(xtream_canais(c, 16) == 3 && pedidos == 3);
+  puts("ok  reservas: principal fora do ar, lista vem da reserva e ela vira o servidor em uso");
+
+  // b1 down and main back: try b1, then main (order is in-use first, then list order).
+  snprintf(hostMorto[0], sizeof hostMorto[0], "b1.tv"); hostMorto[1][0] = 0;
+  assert(xtream_canais(c, 16) == 3 && strstr(ultimaUrl, "://main.tv:8080/"));
+  assert(xtream_reservas_ler(&r, NULL, 0) && r.ativo == 0);
+  // A block page (HTTP 200 + HTML) counts as down too.
+  hostMorto[0][0] = 0; snprintf(hostPagina, sizeof hostPagina, "main.tv");
+  assert(xtream_canais(c, 16) == 3 && strstr(ultimaUrl, "://b1.tv:8080/"));
+  hostPagina[0] = 0;
+  puts("ok  reservas: pagina de bloqueio troca; volta ao principal quando a reserva cai");
+
+  // Wrong password is about the account: it never hops to other servers.
+  k = 0; assert(xtream_reservas_mudar(setActive, &k));
+  recusar = 1; pedidos = 0;
+  assert(xtream_canais(c, 16) == 0 && xtream_ultima_falha() == XT_RECUSOU);
+  assert(xtream_reservas_ler(&r, NULL, 0) && r.ativo == 0);
+  assert(!strstr(ultimaUrl, "b1.tv") && !strstr(ultimaUrl, "b2.tv"));
+  recusar = 0;
+  statusHttp = 458; assert(xtream_canais(c, 16) == 0 && !strstr(ultimaUrl, "b1.tv")); statusHttp = 200;
+  puts("ok  reservas: senha recusada e telas cheias nao trocam de servidor");
+  // Pretty-printed refusals ("auth": 0, "auth":"0") are refusals too.
+  { const char *antes = respAuth0;
+    respAuth0 = "{\n  \"user_info\": {\n    \"auth\": 0,\n    \"status\": \"Disabled\"\n  }\n}";
+    recusar = 1; assert(xtream_canais(c, 16) == 0 && xtream_ultima_falha() == XT_RECUSOU);
+    respAuth0 = "{\"user_info\":{\"auth\":\"0\"}}";
+    assert(xtream_canais(c, 16) == 0 && xtream_ultima_falha() == XT_RECUSOU);
+    recusar = 0; respAuth0 = antes; }
+  puts("ok  recusa com JSON formatado (\"auth\": 0) tambem e recusa");
+
+  // A BACKUP in use that refuses the login (another provider, or the account
+  // left it): the main server is tried and becomes the server in use again.
+  k = 1; assert(xtream_reservas_mudar(setActive, &k));
+  snprintf(hostRecusa, sizeof hostRecusa, "b1.tv");
+  assert(xtream_canais(c, 16) == 3 && strstr(ultimaUrl, "://main.tv:8080/"));
+  assert(xtream_reservas_ler(&r, NULL, 0) && r.ativo == 0);
+  hostRecusa[0] = 0;
+  puts("ok  reservas: reserva que recusa o login volta ao principal");
+
+  // Manual mode: only the chosen server, even when it is down.
+  assert(xtream_reservas_mudar(setAuto, &zero));
+  snprintf(hostMorto[0], sizeof hostMorto[0], "main.tv");
+  assert(xtream_canais(c, 16) == 0 && xtream_ultima_falha() == XT_SEM_RESPOSTA);
+  assert(xtream_reservas_ler(&r, NULL, 0) && r.ativo == 0);
+  assert(xtream_servidores_canal("xtream:9") == 1);
+  k = 2; assert(xtream_reservas_mudar(setActive, &k));
+  assert(xtream_canais(c, 16) == 3 && strstr(ultimaUrl, "://b2.tv/"));
+  assert(xtream_url("xtream:9", url, sizeof url) && !strcmp(url, "https://b2.tv/live/u/p/9.m3u8"));
+  assert(xtream_reservas_mudar(setAuto, &um));
+  hostMorto[0][0] = 0;
+  puts("ok  reservas: modo manual usa so o servidor escolhido");
+
+  // Playback sources: one URL per address, server in use first.
+  assert(xtream_servidores_canal("xtream:9") == 3);
+  assert(xtream_url_formato_em("xtream:9", "ts", 0, url, sizeof url) && !strcmp(url, "https://b2.tv/live/u/p/9.ts"));
+  assert(xtream_url_formato_em("xtream:9", "ts", 1, url, sizeof url) && !strcmp(url, "http://main.tv:8080/live/u/p/9.ts"));
+  assert(xtream_url_formato_em("xtream:9", "ts", 2, url, sizeof url) && !strcmp(url, "http://b1.tv:8080/live/u/p/9.ts"));
+  assert(!xtream_url_formato_em("xtream:9", "ts", 3, url, sizeof url));
+  // A channel that played from main (even through the TS proxy) moves the account back.
+  xtream_formato_funcionou("nvproxy:http://main.tv:8080/live/u/p/9.ts");
+  assert(xtream_reservas_ler(&r, NULL, 0) && r.ativo == 0);
+  xtream_formato_funcionou("http://unrelated.tv/live/u/p/9.ts");
+  assert(xtream_reservas_ler(&r, NULL, 0) && r.ativo == 0);
+  puts("ok  reservas: fontes do canal em cada servidor; o que tocou vira o servidor em uso");
+
+  // Changing the main address goes back to it; forgetting the account drops backups.
+  k = 1; assert(xtream_reservas_mudar(setActive, &k));
+  assert(xtream_definir_servidor("newmain.tv"));
+  assert(xtream_reservas_ler(&r, NULL, 0) && r.ativo == 0 && r.n == 2);
+  xtream_esquecer();
+  assert(!xtream_reservas_ler(&r, NULL, 0) && r.n == 0);
+  puts("ok  reservas: novo principal entra em uso; esquecer a conta apaga as reservas");
 }
 
 int main(void) {
@@ -373,6 +500,7 @@ int main(void) {
   xtream_definir_servidor("srv.tv:8000/xyz");
   assert(strstr(disco, "servidor\thttp://srv.tv:8000\n"));
   puts("ok  servidor com caminho colado normaliza para a raiz");
+  backupServers();
   puts("xtream: tudo ok");
   return 0;
 }

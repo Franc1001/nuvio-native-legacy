@@ -1,5 +1,6 @@
 #include "stalker.h"
 #include "iptvid.h"
+#include "iptvreserva.h"
 #include "rede.h"
 #include "js.h"
 #include "dados.h"
@@ -40,9 +41,10 @@ typedef struct FonteContexto {
   pthread_mutex_t travaSessao_;
   pthread_mutex_t travaTabela_;
   pthread_mutex_t travaHandshake_;
+  IptvReservas reservas_;  // backup portals, same MAC (iptvreserva.h)
 } FonteContexto;
-#define IPTV_CTX_INICIALIZAR(c) do { (c)->perfilLido_ = -1; pthread_mutex_init(&(c)->travaSessao_, NULL); pthread_mutex_init(&(c)->travaTabela_, NULL); pthread_mutex_init(&(c)->travaHandshake_, NULL); } while (0)
-#define IPTV_CTX_EMERGENCIA { .sid = UINT_MAX, .perfilLido_ = -1, .travaSessao_ = PTHREAD_MUTEX_INITIALIZER, .travaTabela_ = PTHREAD_MUTEX_INITIALIZER, .travaHandshake_ = PTHREAD_MUTEX_INITIALIZER }
+#define IPTV_CTX_INICIALIZAR(c) do { (c)->perfilLido_ = -1; iptvres_zerar(&(c)->reservas_); pthread_mutex_init(&(c)->travaSessao_, NULL); pthread_mutex_init(&(c)->travaTabela_, NULL); pthread_mutex_init(&(c)->travaHandshake_, NULL); } while (0)
+#define IPTV_CTX_EMERGENCIA { .sid = UINT_MAX, .perfilLido_ = -1, .reservas_ = { .autoTroca = 1 }, .travaSessao_ = PTHREAD_MUTEX_INITIALIZER, .travaTabela_ = PTHREAD_MUTEX_INITIALIZER, .travaHandshake_ = PTHREAD_MUTEX_INITIALIZER }
 // NV_TPK40: rebuild this unit with pthread storage (tools/tpk.sh).
 #include "iptvcontexto.inc"
 #define portal (contexto()->portal_ )
@@ -61,6 +63,7 @@ typedef struct FonteContexto {
 #define travaSessao (contexto()->travaSessao_ )
 #define travaTabela (contexto()->travaTabela_ )
 #define travaHandshake (contexto()->travaHandshake_ )
+#define reservas (contexto()->reservas_ )
 
 // ---------------------------------------------------------------- utilidades
 
@@ -148,6 +151,7 @@ static void carregarTravado(void) {
   if (lido && p == perfilLido && sessao == sessaoLida) return;
   perfilLido = p; sessaoLida = sessao; lido = 1;
   portal[0] = mac[0] = deviceId[0] = serial[0] = 0;
+  iptvres_zerar(&reservas);
   limparSessao();
   pthread_mutex_lock(&travaTabela); nTabela = 0; pthread_mutex_unlock(&travaTabela);
   b = dados_ler(arquivo());
@@ -164,8 +168,10 @@ static void carregarTravado(void) {
     else if (!strcmp(linha, "mac")) snprintf(mac, sizeof mac, "%s", sep);
     else if (!strcmp(linha, "device")) snprintf(deviceId, sizeof deviceId, "%s", sep);
     else if (!strcmp(linha, "serial")) snprintf(serial, sizeof serial, "%s", sep);
+    else iptvres_ler_linha(&reservas, linha, sep);
   }
   free(b);
+  iptvres_ler_fim(&reservas);
 }
 
 // O CADASTRO E LIDO POR DOIS FIOS: o do guia (que lista canais) e o de desenho
@@ -178,17 +184,23 @@ void stalker_carregar(void) {
 }
 
 static int gravar(void) {
-  char txt[720];
+  size_t tam = 1024 + (size_t)IPTVRES_MAX * (IPTVRES_URL + 16);
+  char *txt = malloc(tam);
+  int ok;
+  if (!txt) return 0;
   // O COMENTARIO VAI NO ARQUIVO, como em listas.c: quem o encontrar primeiro
   // sera alguem depurando a TV de outra pessoa — e precisa saber na hora que
   // aquilo nao e configuracao, e credencial.
-  snprintf(txt, sizeof txt,
+  snprintf(txt, tam,
            "# CREDENCIAL. O MAC autentica a assinatura de quem configurou este\n"
            "# portal, como uma senha. Nao versionar, nao empacotar, nao colar\n"
            "# em issue nem em log.\n"
            "portal\t%s\nmac\t%s\ndevice\t%s\nserial\t%s\n",
            portal, mac, deviceId, serial);
-  return dados_gravar(arquivo(), txt);
+  ok = iptvres_gravar(&reservas, txt, (unsigned)tam) && dados_gravar(arquivo(), txt);
+  memset(txt, 0, tam);
+  free(txt);
+  return ok;
 }
 
 // DOIS CAMPOS, DOIS SETTERS, e nao um `definir` com tudo. A tela de Ajustes
@@ -199,9 +211,11 @@ int stalker_definir_portal(const char *p) {
   pthread_mutex_lock(&travaSessao);
   carregarTravado();
   char anterior[sizeof portal];memcpy(anterior,portal,sizeof anterior);
+  int ativoAntes=reservas.ativo;
   normalizarPortal(p, portal, sizeof portal);
+  reservas.ativo=0;  // a new main portal is a deliberate choice: use it
   int ok=gravar();
-  if(ok)limparSessao();else memcpy(portal,anterior,sizeof anterior);
+  if(ok)limparSessao();else { memcpy(portal,anterior,sizeof anterior); reservas.ativo=ativoAntes; }
   pthread_mutex_unlock(&travaSessao);
   if(ok) { pthread_mutex_lock(&travaTabela); nTabela = 0; pthread_mutex_unlock(&travaTabela); }
   return ok;
@@ -212,10 +226,12 @@ int stalker_conta_definir(const char *p,const char *m) {
   char normal[sizeof portal];normalizarPortal(p,normal,sizeof normal);if(!strcmp(normal,"http://"))return 0;
   pthread_mutex_lock(&travaSessao);carregarTravado();
   char antigoP[sizeof portal],antigoM[sizeof mac];memcpy(antigoP,portal,sizeof antigoP);memcpy(antigoM,mac,sizeof antigoM);
+  int ativoAntes=reservas.ativo;
+  if(strcmp(portal,normal))reservas.ativo=0;
   snprintf(portal,sizeof portal,"%s",normal);snprintf(mac,sizeof mac,"%s",m);
   int atual=nv_perfil_sessao_travar(sessaoLida),ok=atual && gravar();
   if(atual)nv_perfil_sessao_destravar();
-  if(!ok) { memcpy(portal,antigoP,sizeof antigoP);memcpy(mac,antigoM,sizeof antigoM); }
+  if(!ok) { memcpy(portal,antigoP,sizeof antigoP);memcpy(mac,antigoM,sizeof antigoM);reservas.ativo=ativoAntes; }
   else limparSessao();
   memset(antigoM,0,sizeof antigoM);pthread_mutex_unlock(&travaSessao);
   if(ok) { pthread_mutex_lock(&travaTabela);nTabela=0;pthread_mutex_unlock(&travaTabela); }
@@ -246,6 +262,7 @@ void stalker_esquecer(void) {
   pthread_mutex_lock(&travaSessao);
   dados_apagar(arquivo());
   portal[0] = mac[0] = deviceId[0] = serial[0] = 0;
+  iptvres_zerar(&reservas);
   limparSessao();
   lido = 1; perfilLido = perfis_ativo();
   pthread_mutex_unlock(&travaSessao);
@@ -382,8 +399,15 @@ static int candidato(int k, const char *portalBase, char *base, unsigned tam, co
   return 0;
 }
 
+// portalCopia is the portal IN USE (the main one, or the backup that last
+// gave a token); principal is the account's main portal, the key that says
+// "the account was not edited meanwhile". ordem/portais: every portal of the
+// account in the order of attempts (iptvreserva.h).
 typedef struct {
   char portalCopia[256], macCopia[32], tokenCopia[128], rota[96], efetiva[256];
+  char principal[256];
+  char portais[IPTVRES_MAX + 1][256];
+  int ordem[IPTVRES_MAX + 1], nPortais;
   time_t tokenEmCopia;
 } StConexao;
 
@@ -391,7 +415,12 @@ static int conexaoLer(StConexao *c, NvPerfilSessao sessao) {
   pthread_mutex_lock(&travaSessao);
   if (!nv_perfil_sessao_travar(sessao)) { pthread_mutex_unlock(&travaSessao); return 0; }
   carregarTravado();
-  snprintf(c->portalCopia, sizeof c->portalCopia, "%s", portal);
+  snprintf(c->principal, sizeof c->principal, "%s", portal);
+  c->nPortais = iptvres_ordem(&reservas, portal, c->ordem);
+  for (int i = 0; i < c->nPortais; i++)
+    snprintf(c->portais[i], sizeof c->portais[i], "%s", iptvres_servidor(&reservas, portal, c->ordem[i]));
+  { const char *uso = iptvres_servidor(&reservas, portal, reservas.ativo);
+    snprintf(c->portalCopia, sizeof c->portalCopia, "%s", uso ? uso : portal); }
   snprintf(c->macCopia, sizeof c->macCopia, "%s", mac);
   snprintf(c->tokenCopia, sizeof c->tokenCopia, "%s", token);
   snprintf(c->rota, sizeof c->rota, "%s", caminho);
@@ -405,59 +434,78 @@ static int conexaoLer(StConexao *c, NvPerfilSessao sessao) {
 // Serializa so as renovacoes, nunca os getters do desenho. O HTTP usa uma
 // copia do cadastro; trocar perfil/editar cadastro nao espera o portal.
 static int renovarToken(NvPerfilSessao sessao, const char *usado, int renovarAntes) {
-  StConexao c;
-  int k, lembrada, ok = 0;
+  StConexao *c = malloc(sizeof *c);
+  int k, lembrada, ok = 0, i;
+  if (!c) return 0;
   pthread_mutex_lock(&travaHandshake);
-  if (!conexaoLer(&c, sessao)) goto fim;
-  if (c.tokenCopia[0] &&
-      (usado ? strcmp(usado, c.tokenCopia) != 0
-             : !(renovarAntes && c.tokenEmCopia && time(NULL) - c.tokenEmCopia > ST_TOKEN_VALIDO_S))) {
+  if (!conexaoLer(c, sessao)) goto fim;
+  if (c->tokenCopia[0] &&
+      (usado ? strcmp(usado, c->tokenCopia) != 0
+             : !(renovarAntes && c->tokenEmCopia && time(NULL) - c->tokenEmCopia > ST_TOKEN_VALIDO_S))) {
     ok = 1; goto fim;
   }
-  lembrada = c.rota[0] != 0;
-  for (k = 0; nv_perfil_sessao_atual(sessao); k++) {
-    char *corpo, base[256];
-    const char *rota;
-    // Rota que ja provou funcionar entra primeiro nas vezes seguintes; na
-    // primeira, `caminho` esta vazio e a varredura e a ordem acima.
-    if (lembrada) {
-      snprintf(base, sizeof base, "%s", c.efetiva[0] ? c.efetiva : c.portalCopia);
-      rota = c.rota;
-    } else if (!candidato(k, c.portalCopia, base, sizeof base, &rota)) {
-      break;
+  // BACKUP PORTALS: the portal in use first (with the route it remembers),
+  // then the others of the account, each with the full route scan. The first
+  // that gives a token becomes the portal in use.
+  for (i = 0; i < c->nPortais && !ok && nv_perfil_sessao_atual(sessao); i++) {
+    const char *alvo = c->portais[i];
+    lembrada = i == 0 && c->rota[0] != 0 && !strcmp(alvo, c->portalCopia);
+    if (i > 0) {
+      printf("[stalker] portal %d de %d nao respondeu: tentando o proximo\n", i, c->nPortais);
+      fflush(stdout);
     }
-    if (!rota) continue;
-    corpo = pedir(base, c.macCopia, rota, "", "type=stb&action=handshake&token=&prehash=0", sessao);
-    if (temJs(corpo)) {
-      char t[128];
-      if (textoResposta(corpo, "token", t, sizeof t) && t[0]) {
-        free(corpo);
-        // get_profile confirma o MAC. Portal que recusa a assinatura responde
-        // aqui, e nao no handshake — sem esta chamada o app so descobriria no
-        // create_link, com a pessoa ja olhando a tela de carregar.
-        corpo = pedir(base, c.macCopia, rota, t, "type=stb&action=get_profile&hd=1&num_banks=2"
-                                           "&stb_type=MAG250&image_version=218&auth_second_step=0", sessao);
-        if (corpo) free(corpo);
-        pthread_mutex_lock(&travaSessao);
-        if (nv_perfil_sessao_travar(sessao)) {
-          if (!strcmp(portal, c.portalCopia) && !strcmp(mac, c.macCopia)) {
-            snprintf(token, sizeof token, "%s", t);
-            snprintf(caminho, sizeof caminho, "%s", rota);
-            snprintf(baseEf, sizeof baseEf, "%s", base);
-            tokenEm = time(NULL); ok = 1;
-          }
-          nv_perfil_sessao_destravar();
-        }
-        pthread_mutex_unlock(&travaSessao);
-        goto fim;
+    for (k = 0; nv_perfil_sessao_atual(sessao); k++) {
+      char *corpo, base[256];
+      const char *rota;
+      // Rota que ja provou funcionar entra primeiro nas vezes seguintes; na
+      // primeira, `caminho` esta vazio e a varredura e a ordem acima.
+      if (lembrada) {
+        snprintf(base, sizeof base, "%s", c->efetiva[0] ? c->efetiva : alvo);
+        rota = c->rota;
+      } else if (!candidato(k, alvo, base, sizeof base, &rota)) {
+        break;
       }
+      if (!rota) continue;
+      corpo = pedir(base, c->macCopia, rota, "", "type=stb&action=handshake&token=&prehash=0", sessao);
+      if (temJs(corpo)) {
+        char t[128];
+        if (textoResposta(corpo, "token", t, sizeof t) && t[0]) {
+          free(corpo);
+          // get_profile confirma o MAC. Portal que recusa a assinatura responde
+          // aqui, e nao no handshake — sem esta chamada o app so descobriria no
+          // create_link, com a pessoa ja olhando a tela de carregar.
+          corpo = pedir(base, c->macCopia, rota, t, "type=stb&action=get_profile&hd=1&num_banks=2"
+                                             "&stb_type=MAG250&image_version=218&auth_second_step=0", sessao);
+          if (corpo) free(corpo);
+          pthread_mutex_lock(&travaSessao);
+          if (nv_perfil_sessao_travar(sessao)) {
+            if (!strcmp(portal, c->principal) && !strcmp(mac, c->macCopia)) {
+              const char *mesmo = iptvres_servidor(&reservas, portal, c->ordem[i]);
+              snprintf(token, sizeof token, "%s", t);
+              snprintf(caminho, sizeof caminho, "%s", rota);
+              snprintf(baseEf, sizeof baseEf, "%s", base);
+              tokenEm = time(NULL); ok = 1;
+              if (mesmo && !strcmp(mesmo, alvo) && reservas.ativo != c->ordem[i]) {
+                int antes = reservas.ativo;
+                reservas.ativo = c->ordem[i];
+                if (!gravar()) reservas.ativo = antes;
+                else { printf("[stalker] portal em uso agora: %s\n", c->ordem[i] ? "reserva" : "principal"); fflush(stdout); }
+              }
+            }
+            nv_perfil_sessao_destravar();
+          }
+          pthread_mutex_unlock(&travaSessao);
+          break;
+        }
+      }
+      if (corpo) free(corpo);
+      // A rota lembrada falhou: esquecer e varrer de novo a partir do inicio.
+      if (lembrada) { lembrada = 0; c->rota[0] = c->efetiva[0] = 0; k = -1; }
     }
-    if (corpo) free(corpo);
-    // A rota lembrada falhou: esquecer e varrer de novo a partir do inicio.
-    if (lembrada) { lembrada = 0; c.rota[0] = c.efetiva[0] = 0; k = -1; }
   }
 fim:
   pthread_mutex_unlock(&travaHandshake);
+  free(c);
   return ok;
 }
 
@@ -718,10 +766,49 @@ int stalker_resolver_sessao(const char *id,char *out,unsigned n,uint64_t sessao)
   unsigned a=usarFonte(f);int r=resolverSessao(original,out,n,sessao);usarFonte(a);return r;
 }
 
+// --- backup portals, for Settings (selected account) ------------------------
+int stalker_reservas_ler(IptvReservas *out, char *principal, unsigned n) {
+  int ok;
+  pthread_mutex_lock(&travaSessao);
+  carregarTravado();
+  if (out) *out = reservas;
+  if (principal && n) snprintf(principal, n, "%s", portal);
+  ok = portal[0] != 0;
+  pthread_mutex_unlock(&travaSessao);
+  return ok;
+}
+int stalker_reservas_mudar(int (*f)(IptvReservas *r, const char *principal, void *u), void *u) {
+  IptvReservas *antes = f ? malloc(sizeof *antes) : NULL;
+  int ok = 0, ativoAntes;
+  if (!antes) return 0;
+  pthread_mutex_lock(&travaSessao);
+  carregarTravado();
+  *antes = reservas; ativoAntes = reservas.ativo;
+  if (portal[0] && f(&reservas, portal, u)) {
+    int atual = nv_perfil_sessao_travar(sessaoLida);
+    ok = atual && gravar();
+    if (atual) nv_perfil_sessao_destravar();
+    // Another portal in use means another token: the next call shakes hands.
+    if (ok && reservas.ativo != ativoAntes) limparSessao();
+  }
+  if (!ok) reservas = *antes;
+  pthread_mutex_unlock(&travaSessao);
+  free(antes);
+  return ok;
+}
+int stalker_normalizar_portal(const char *entrada, char *dst, unsigned tam) {
+  if (!dst || !tam) return 0;
+  dst[0] = 0;
+  if (!entrada || strlen(entrada) >= 256 || strpbrk(entrada, "\r\n\t")) return 0;
+  normalizarPortal(entrada, dst, tam);
+  if (!strcmp(dst, "http://")) { dst[0] = 0; return 0; }
+  return 1;
+}
+
 void stalker_fontes_invalidar(void) {
   pthread_mutex_lock(&fontesTrava);
   for(FonteContexto *c=fontesContextos;c;c=c->proximo){ pthread_mutex_lock(&c->travaSessao_);c->lido_=0;c->token_[0]=0;c->tokenEm_=0;
-    c->portal_[0]=c->mac_[0]=c->deviceId_[0]=c->serial_[0]=0;
+    c->portal_[0]=c->mac_[0]=c->deviceId_[0]=c->serial_[0]=0;iptvres_zerar(&c->reservas_);
     pthread_mutex_lock(&c->travaTabela_);memset(c->tabela_,0,sizeof c->tabela_);c->nTabela_=0;pthread_mutex_unlock(&c->travaTabela_);
     pthread_mutex_unlock(&c->travaSessao_); }
   pthread_mutex_unlock(&fontesTrava);

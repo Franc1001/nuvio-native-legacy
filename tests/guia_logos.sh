@@ -8,7 +8,7 @@ out=/Volumes/ExternalSSD/tmp/rev/livelogos
 mkdir -p "$out"
 flags=(-ffunction-sections -fdata-sections -Wl,-dead_strip)
 sources=(src/ltv.c src/js.c src/idcanal.c src/dados.c src/marco.c src/guiaaddons.c
-  src/xtream.c src/epg.c src/xmltv.c src/lembrete.c src/guialembrete.c
+  src/xtream.c src/iptvreserva.c src/epg.c src/xmltv.c src/lembrete.c src/guialembrete.c
   src/fontecache.c src/cachearte.c src/cachedisco.c
   src/gfx.c src/text.c src/dobra.c src/bidi.c src/layout.c
   src/corviva.c src/gpunivel.c src/esmaecer.c)

@@ -18,7 +18,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [live-tv-categories, iptv-backup-servers]
+    branches: [live-tv-v2, live-tv-categories, iptv-backup-servers]
     paths-ignore:
       - "docs/**"
       - "**/*.md"
@@ -46,8 +46,10 @@ jobs:
 
       - name: Unit tests for Live TV accounts
         run: |
+          bash tests/iptvreserva.sh
           bash tests/xtream.sh
           bash tests/m3u.sh
+          bash tests/stalker_portal.sh
           bash tests/catcanalvazio.sh
 
       - uses: actions/setup-java@v4

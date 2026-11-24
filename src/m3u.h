@@ -33,4 +33,17 @@ int m3u_fonte_total(unsigned id);
 void m3u_fonte_recarregar(unsigned id);
 void m3u_fonte_esquecer(unsigned id);
 void m3u_fontes_invalidar(void);
+// --- backup servers (iptvreserva.h) ---------------------------------------
+// A backup is a bare host (same path/query as the main playlist) or a full
+// playlist URL. The playlist is fetched from the server in use and falls over
+// to the others; channel URLs served from the account's own host can be tried
+// on the other hosts too.
+#include "iptvreserva.h"
+int m3u_fonte_lista_em(unsigned id,int pos,char *url,unsigned n);  // playlist of the pos-th server tried
+void m3u_fonte_lista_usou(unsigned id,int pos);                      // that one answered
+int m3u_url_reserva(const char *id,const char *url,int pos,char *out,unsigned n);
+void m3u_canal_funcionou(const char *id,const char *url);
+int m3u_reservas_ler(IptvReservas *out,char *principal,unsigned n);
+int m3u_reservas_mudar(int (*f)(IptvReservas *r,const char *principal,void *u),void *u);
+int m3u_normalizar_reserva(const char *entrada,char *dst,unsigned n);
 #endif

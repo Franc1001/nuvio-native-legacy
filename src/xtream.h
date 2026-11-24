@@ -128,6 +128,11 @@ int xtream_url(const char *id, char *url, unsigned n);
 int xtream_formatos(const char *ext[2]);
 // A URL com a extensao pedida.
 int xtream_url_formato(const char *id, const char *ext, char *url, unsigned n);
+// The same URL on the `pos`-th address of the order of attempts (0 = server in
+// use, then the account's other addresses when automatic switching is on).
+int xtream_url_formato_em(const char *id, const char *ext, int pos, char *url, unsigned n);
+// How many addresses a channel of this account can be tried on.
+int xtream_servidores_canal(const char *id);
 // Avisa que esta URL tocou (loadCompleted): o formato dela vai primeiro nos
 // proximos canais da sessao.
 void xtream_formato_funcionou(const char *url);
@@ -147,6 +152,7 @@ int xtream_epg_parse(const char *json, XtreamProg *out, int cap);
 int xtream_url_xmltv(char *url, unsigned n);
 
 void xtream_fonte_selecionar(unsigned id);
+unsigned xtream_fonte_selecionada(void);   // to restore after a one-off read
 int xtream_fonte_configurado(unsigned id);
 int xtream_fonte_canais(unsigned id, XtreamCanal *out, int max, uint64_t sessao);
 int xtream_fonte_canais_cb(unsigned id, void (*cat)(const char *, int, int, void *),
@@ -159,4 +165,12 @@ int xtream_formatos_canal(const char *id, const char *ext[2]);
 int xtream_conta_canal(const char *id, XtreamConta *out);
 void xtream_formato_canal_funcionou(const char *id, const char *url);
 void xtream_fontes_invalidar(void);
+
+// --- backup servers (iptvreserva.h), selected account ----------------------
+// Same username and password, other addresses. Read a copy, or change the list
+// under the account lock (f returns 1 to save). The main address is servidor.
+#include "iptvreserva.h"
+int xtream_reservas_ler(IptvReservas *out, char *principal, unsigned n);
+int xtream_reservas_mudar(int (*f)(IptvReservas *r, const char *principal, void *u), void *u);
+int xtream_normalizar_servidor(const char *entrada, char *dst, unsigned tam);
 #endif

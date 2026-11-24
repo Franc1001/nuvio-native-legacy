@@ -1,0 +1,128 @@
+name: Build Android APK
+
+# Builds the Android TV / phone APK (debug-signed, installs next to the official
+# app as space.nuvio.nativelegacy.strictdebug) the same way
+# `tools/android.sh --debug-only` does on a computer, and uploads it as a
+# downloadable artifact: Actions tab -> Build Android APK -> the run -> Artifacts.
+#
+# No secrets needed: without the Nuvio account server the app opens straight
+# into the home screen with no login (login_sem_conta, src/login.c) and Live TV
+# works from the IPTV accounts added in Settings. Optional repository secrets
+# (Settings -> Secrets and variables -> Actions) turn on the matching features:
+#   NUVIO_SUPABASE_URL, NUVIO_SUPABASE_ANON_KEY, TV_LOGIN_WEB_BASE_URL (account
+#   login and sync), TMDB_API_KEY, TRAKT_CLIENT_ID, TRAKT_CLIENT_SECRET,
+#   SIMKL_CLIENT_ID, SIMKL_APP_NAME, DISCORD_CLIENT_ID.
+# Values never reach the log or the repo: they go to local.properties
+# (gitignored) inside the runner only.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [iptv-backup-servers]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      # No P2P engine on CI (it lives on the upstream owner's disk, not in the repo).
+      NUVIO_P2P_MOTOR: none
+      # The C matroska core instead of the Rust one: no Rust toolchain needed.
+      NUVIO_RUST_MKVCORE: "0"
+      NUVIO_ANDROID_CACHE: ${{ github.workspace }}/.cache/nuvio-android
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unit tests for Live TV accounts
+        run: |
+          bash tests/xtream.sh
+          bash tests/m3u.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # The runner image already ships the Android SDK (ANDROID_HOME); add the
+      # exact NDK/platform/build-tools/CMake versions tools/android.sh checks.
+      - name: Android SDK packages
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKM" ] || SDKM="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | tail -1)"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "ndk;27.2.12479018" "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" > /dev/null
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Host tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg ninja-build
+
+      - name: Account server configuration
+        env:
+          NUVIO_SUPABASE_URL: ${{ secrets.NUVIO_SUPABASE_URL }}
+          NUVIO_SUPABASE_ANON_KEY: ${{ secrets.NUVIO_SUPABASE_ANON_KEY }}
+          TV_LOGIN_WEB_BASE_URL: ${{ secrets.TV_LOGIN_WEB_BASE_URL }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
+          TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
+          SIMKL_CLIENT_ID: ${{ secrets.SIMKL_CLIENT_ID }}
+          SIMKL_APP_NAME: ${{ secrets.SIMKL_APP_NAME }}
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+        run: |
+          umask 077
+          : > local.properties
+          for k in NUVIO_SUPABASE_URL NUVIO_SUPABASE_ANON_KEY TV_LOGIN_WEB_BASE_URL TMDB_API_KEY \
+                   TRAKT_CLIENT_ID TRAKT_CLIENT_SECRET SIMKL_CLIENT_ID SIMKL_APP_NAME DISCORD_CLIENT_ID; do
+            v="${!k}"
+            [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> local.properties
+          done
+          echo "configured: $(cut -d= -f1 local.properties | tr '\n' ' ')"
+
+      # curl/mbedTLS, libjpeg-turbo, libwebp and the FFmpeg decoder take long to
+      # build; reuse them between runs.
+      - name: Restore native dependencies cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.NUVIO_ANDROID_CACHE }}
+          key: android-deps-${{ hashFiles('tools/android/deps.sh', 'tools/android/ffmpeg-android.sh', 'tools/android.sh') }}
+
+      # Gradle's downloads (Android plugin, libraries) are kept between runs:
+      # Maven Central answers 429 Too Many Requests to repeated full downloads.
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Native dependencies (curl, jpeg, webp)
+        run: bash tools/android/deps.sh
+
+      # One retry after a pause: a 429 from Maven Central is temporary.
+      - name: Build APK
+        run: bash tools/android.sh --debug-only || { echo "retrying in 60 s"; sleep 60; bash tools/android.sh --debug-only; }
+
+      - name: Save native dependencies cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.NUVIO_ANDROID_CACHE }}
+          key: android-deps-${{ hashFiles('tools/android/deps.sh', 'tools/android/ffmpeg-android.sh', 'tools/android.sh') }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuvio-android-apk
+          path: build/android/*.apk
+          if-no-files-found: error

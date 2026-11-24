@@ -3798,6 +3798,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK izler  ·  OK basılı = favori  ·  ←→ ızgarayı ileri kaydırır  ·  ↑↓ basılı bölümler arasında atlar  ·  Geri çıkar"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK izle  ·  OK basılı = seçenekler  ·  ←→ rehberi kaydır  ·  ↑ kaynaklar  ·  Geri çıkar"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK izle  ·  OK basılı = seçenekler  ·  ↑ kaynaklar  ·  ↑↓ basılı bölüm atlar  ·  Geri çıkar"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK izle  ·  \xe2\x86\x90 kategoriler  ·  OK basılı tut = seçenekler  ·  Geri çıkar"),
   T("OK avisa quando começar", "OK başladığında seni uyarır"),
   T("OK começa · Voltar cancela", "OK başlatır · Geri iptal eder"),
   T("OK continua · Voltar fecha", "OK devam eder · Geri kapatır"),

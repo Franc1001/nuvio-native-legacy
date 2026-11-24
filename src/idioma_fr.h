@@ -3797,6 +3797,7 @@
   T("OK assiste  ·  segure OK = favorito  ·  ←→ adianta a grade  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK lit  ·  maintenir OK = favori  ·  ←→ avance la grille  ·  maintenir ↑↓ saute de section  ·  Retour quitte"),
   T("OK assiste  ·  segure OK = opções  ·  ←→ adianta a grade  ·  ↑ fontes  ·  Voltar sai", "OK regarder  ·  maintenir OK = options  ·  ←→ déplacer le guide  ·  ↑ sources  ·  Retour quitte"),
   T("OK assiste  ·  segure OK = opções  ·  ↑ fontes  ·  segure ↑↓ pula seção  ·  Voltar sai", "OK regarder  ·  maintenir OK = options  ·  ↑ sources  ·  maintenir ↑↓ saute la section  ·  Retour quitte"),
+  T("OK assiste  ·  \xe2\x86\x90 categorias  ·  segure OK = opções  ·  Voltar sai", "OK regarder  ·  \xe2\x86\x90 catégories  ·  maintenir OK = options  ·  Retour quitte"),
   T("OK avisa quando começar", "OK prévient au début"),
   T("OK começa · Voltar cancela", "OK démarre · Retour annule"),
   T("OK continua · Voltar fecha", "OK continue · Retour ferme"),

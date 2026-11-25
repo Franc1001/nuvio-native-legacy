@@ -330,7 +330,8 @@ int   ajustes_pediu_livetv_diag(void);
 // Modo do load do player nos canais: 0 A, 1 B, 2 C (video_definir_modo_live).
 int   ajustes_livetv_modo(void);
 int   ajustes_livetv_proxy(void);
-int   ajustes_livetv_sugerir(void);   // Jev sugere categoria so para canal sem categoria (livecat.h)
+int   ajustes_livetv_sugerir(void);
+int   ajustes_ltv_juntar(void);            // Live TV: merge the versions of a channel into one row   // Jev sugere categoria so para canal sem categoria (livecat.h)
 void  ajustes_livetv_aplicar_proxy(int ligado);   // proxy de TS da Live TV (proxyts.c)
 void  ajustes_livetv_aplicar_modo(int modo);
 

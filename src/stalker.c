@@ -739,6 +739,7 @@ int stalker_resolver(const char *id, char *url, unsigned n) {
 }
 
 void stalker_fonte_selecionar(unsigned id){atomic_store(&contaEditada,id);}
+unsigned stalker_fonte_selecionada(void){return atomic_load(&contaEditada);}
 int stalker_fonte_configurado(unsigned id){unsigned a=usarFonte(id);int r=stalker_configurado();usarFonte(a);return r;}
 int stalker_fonte_canais(unsigned id,StalkerCanal *out,int max,uint64_t sessao){
   unsigned a=usarFonte(id);int n=stalker_canais_sessao(out,max,sessao);

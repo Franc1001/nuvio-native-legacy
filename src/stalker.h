@@ -105,6 +105,7 @@ int stalker_resolver(const char *id, char *url, unsigned n);
 int stalker_resolver_sessao(const char *id, char *url, unsigned n, uint64_t sessao);
 
 void stalker_fonte_selecionar(unsigned id);
+unsigned stalker_fonte_selecionada(void);   // to restore after a one-off read
 int stalker_fonte_configurado(unsigned id);
 int stalker_fonte_canais(unsigned id,StalkerCanal *out,int max,uint64_t sessao);
 int stalker_fonte_canais_cb(unsigned id, StalkerCb cb, void *u, uint64_t sessao);

@@ -25,6 +25,7 @@ int m3u_resolver_sessao(const char *id,char *url,unsigned n,uint64_t sessao,int 
 int m3u_cabecalhos(const char *id,char *saida,unsigned n);
 void m3u_recarregar(void);
 void m3u_fonte_selecionar(unsigned id);
+unsigned m3u_fonte_selecionada(void);   // to restore after a one-off read
 int m3u_fonte_configurado(unsigned id);
 int m3u_fonte_canais(unsigned id,M3uCanal *out,int max,uint64_t sessao);
 int m3u_fonte_urls(unsigned id,char *lista,unsigned nLista,char *epg,unsigned nEpg);

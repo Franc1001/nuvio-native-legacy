@@ -3587,8 +3587,6 @@ static void acaoOk(void) {
 
 // O CANAL DE UM LEMBRETE, para o "Assistir" do cartao: o CatItem do guia
 // quando a lista ja esta carregada; senao so a identidade guardada.
-// The list (cache or provider) has this channel: the last-channel start waits for it.
-int guia_tem_canal(const char *id, const char *base) { return id && id[0] && canalPorIdBase(id, base) != NULL; }
 int guia_item_do_canal(const char *id, const char *nome, const char *base, CatItem *it) {
   GCanal *c = canalPorIdBase(id, base);
   if (c) { canalParaItem(c, it); snprintf(pedidoBase, sizeof pedidoBase, "%s", c->base); snprintf(pedidoTipo, sizeof pedidoTipo, "%s", c->tipo); return 1; }

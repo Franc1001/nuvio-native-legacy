@@ -356,4 +356,3 @@
   0, 0, 0, 0, 0, /* IPTV backup servers: the account file owns these values */
   0, 0, 0, /* add-ons added by hand: addons-locais-p<N>.txt owns them */
   0, /* Live TV: merge channel versions: On (V_LIGA 0) */
-  1, /* app opens in: Live TV (V_LTV_INICIO 1) */

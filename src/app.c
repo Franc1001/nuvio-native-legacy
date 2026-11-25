@@ -3556,19 +3556,6 @@ static void tentarProximaFonteVOD(void) {
 // ULTIMO CANAL (recall, M7): o canal que estava no ar antes do atual. Guardado
 // em toda troca de canal; o "0" e o botao do OSD voltam a ele (e trocam de lugar).
 static char ultCanalId[80], ultCanalNome[140], ultCanalBase[600];
-// WHERE THE APP OPENS (Settings > Live TV > Open the app in, ajustes_ltv_inicio):
-// Home, Live TV (default) or the last channel watched full screen, kept per
-// profile in livetv-ultimo-p<N>.txt ("id TAB name TAB source base").
-static int inicioAplicado, inicioUltimoPend;
-static Uint32 inicioUltimoDesde;
-static void inicioArquivo(char *nome, size_t n) { snprintf(nome, n, "livetv-ultimo-p%d.txt", perfis_ativo() > 0 ? perfis_ativo() : 1); }
-static void ultimoCanalGuardar(const char *id, const char *nomeCanal, const char *base) {
-  char nome[48], t[900];
-  if (!id || !id[0]) return;
-  inicioArquivo(nome, sizeof nome);
-  snprintf(t, sizeof t, "%s\t%s\t%s\n", id, nomeCanal ? nomeCanal : "", base ? base : "");
-  dados_gravar(nome, t);
-}
 static char atualCanalBase[600];
 static int canalIptv(const char *id) {
   return id && id[0] && (xtream_e_id(id) || guia_e_m3u(id) || stalker_e_id(id) || m3u_e_id(id));
@@ -5713,41 +5700,6 @@ void app_atualizar(float dt, Uint32 agora) {
     return;
   }
 
-  if (!inicioAplicado && login_concluido() && tela == TELA_HOME && !player_aberto()) {
-    int onde = ajustes_ltv_inicio();
-    inicioAplicado = 1;
-    if (onde >= 1) {
-      printf("[inicio] app abre em %s\n", onde == 2 ? "ultimo canal" : "TV ao vivo"); fflush(stdout);
-      trocarTela(TELA_GUIA);
-      menu_definir_destino(MENU_GUIA);
-      if (onde == 2) { inicioUltimoPend = 1; inicioUltimoDesde = SDL_GetTicks(); }
-    }
-  }
-  // LAST CHANNEL: plays as soon as the list (cache or provider) has it; after
-  // 25 s without it the Live TV list simply stays on screen.
-  if (inicioUltimoPend) {
-    char nome[48], *t;
-    inicioArquivo(nome, sizeof nome);
-    t = dados_ler(nome);
-    if (!t || tela != TELA_GUIA || player_aberto() || SDL_GetTicks() - inicioUltimoDesde > 25000u) {
-      if (t || tela != TELA_GUIA) { printf("[inicio] ultimo canal: %s\n", t ? "nao apareceu na lista; fica a TV ao vivo" : "nenhum guardado"); fflush(stdout); }
-      inicioUltimoPend = 0;
-    } else {
-      char *id = t, *nm = strchr(t, '\t'), *base = nm ? strchr(nm + 1, '\t') : NULL, *fim;
-      if (nm) *nm++ = 0;
-      if (base) { *base++ = 0; fim = base + strcspn(base, "\r\n"); *fim = 0; }
-      if (id[0] && guia_tem_canal(id, base ? base : "")) {
-        CatItem it;
-        if (guia_item_do_canal(id, nm ? nm : "", base ? base : "", &it)) {
-          guia_focar_id(id);
-          printf("[inicio] tocando o ultimo canal\n"); fflush(stdout);
-          tocarCanal(&it);
-        }
-        inicioUltimoPend = 0;
-      }
-    }
-    free(t);
-  }
   { int c = menu_pediu_colecao();
     const ColFolder *pf = c >= 0 ? col_folder(c) : NULL;
     if (pf) vertudo_colecao(pf); }
@@ -6704,7 +6656,6 @@ void app_atualizar(float dt, Uint32 agora) {
       // preview sai antes (miniGuia armado mandaria o canal novo para o preview).
       if (player_mini_no_guia_ativo()) player_fechar_mini();
       tocarCanal(&it);
-      ultimoCanalGuardar(it.imdb, it.titulo, guia_canal_origem());
     } }
   // O PREVIEW DO GUIA e uma sessao "mini no guia" do player: mesma busca de
   // fonte, mesmo watchdog, e o OK nele depois so faz a janela crescer.
@@ -6724,7 +6675,6 @@ void app_atualizar(float dt, Uint32 agora) {
   // OK no canal que ja toca no preview: tela cheia crescendo, SEM carregar.
   if (guia_pediu_restaurar() && player_mini_no_guia_ativo()) {
     player_restaurar();
-    ultimoCanalGuardar(player_id_canal(), player_titulo_canal(), atualCanalBase);
     printf("[guia] preview -> tela cheia no mesmo fluxo\n");
     fflush(stdout);
   }
@@ -6747,7 +6697,7 @@ void app_atualizar(float dt, Uint32 agora) {
     if (dir && player_aberto() && aguardandoFonte != 2) {
       const char *id = player_id_canal();
       CatItem it;
-      if (id[0] && guia_zap(id, dir, &it)) { tocarCanal(&it); ultimoCanalGuardar(it.imdb, it.titulo, guia_canal_origem()); }
+      if (id[0] && guia_zap(id, dir, &it)) tocarCanal(&it);
       else guia_carregar();
     } }
 

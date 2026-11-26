@@ -134,12 +134,18 @@ static float gTopoFim = 80.0f;
 static void gTopoMedir(void);
 static float gPreviewLargura(void);
 // GLASS LIST (NV_GUIA_SO_CANAIS on a landscape screen, this fork): channel
-// names on the left, a large rounded live preview on the right with the
-// channel's name under it. No programme guide. Defined after modoLista.
+// names on the left, the live picture on the right. No programme guide.
+// Defined after modoLista.
+// HOME LOOK (owner, 26/11/2026, option B): the screen reads like Home. The
+// focused channel is the hero (big title, meta line, LIVE and versions chips)
+// at the top left, the live picture sits where Home puts the artwork (flush
+// top right, fading into the page), category titles are Home row titles and
+// the focused row carries the Home focus ring.
 static int gVidro(void);
-#define G_V_TOPO     208.0f
-#define G_V_PREVIEW  960.0f
-#define G_V_VAO       64.0f
+#define G_V_TOPO     336.0f    // list (first category title) under the hero
+#define G_V_PREVIEW 1152.0f    // 16:9, 1152x648, flush with the top right
+#define G_V_LISTA_W  700.0f    // channel column
+#define G_V_HERO_Y   128.0f    // hero title top
 #define G_HERO_Y   (gRetrato() ? gTopoFim + 60.0f : 204.0f)
 // PREVIEW: 800x450 e 41,7% da largura, 16:9 exato. Os MESMOS numeros furam a
 // superficie GL (desenharHero) e posicionam o plano de video (a sessao "mini
@@ -147,12 +153,10 @@ static int gVidro(void);
 // so, senao o furo e o video desencontram.
 #define G_PREVIEW_W gPreviewLargura()
 #define G_PREVIEW_H (G_PREVIEW_W * (9.0f / 16.0f))
-#define G_PREVIEW_X (gRetrato() ? G_AREA_X + (G_AREA_W - G_PREVIEW_W) * 0.5f : gVidro() ? NV_TELA_W - NV_MARGEM_X - G_PREVIEW_W : NV_TELA_W - G_PREVIEW_W)
+#define G_PREVIEW_X (gRetrato() ? G_AREA_X + (G_AREA_W - G_PREVIEW_W) * 0.5f : NV_TELA_W - G_PREVIEW_W)
 #define G_INFO_H    450.0f
-#define G_PREVIEW_Y (gRetrato() ? G_HERO_Y + G_INFO_H + 24.0f : gVidro() ? G_V_TOPO : 0.0f)
-#define G_PREVIEW_RAIO (gRetrato() ? 16.0f : gVidro() ? 28.0f : 0.0f)          // px; vira fracao do menor lado no uso
-// Glass list: the channel column ends G_V_VAO before the preview.
-#define G_V_LISTA_W (G_PREVIEW_X - G_V_VAO - G_AREA_X)
+#define G_PREVIEW_Y (gRetrato() ? G_HERO_Y + G_INFO_H + 24.0f : 0.0f)
+#define G_PREVIEW_RAIO (gRetrato() ? 16.0f : 0.0f)          // px; vira fracao do menor lado no uso
 // Ficha do canal a esquerda do preview, com 48 de respiro ate ele.
 #define G_INFO_X   G_AREA_X
 #define G_INFO_W   (gRetrato() ? G_AREA_W : G_PREVIEW_X - 48.0f - G_INFO_X)
@@ -187,9 +191,9 @@ static int gVidro(void);
 // Linha de 80 (celula de 72 + 8 de vao): titulo de 28 e horario de 23 em
 // duas linhas cabem com folga, e sobram CINCO canais visiveis abaixo do
 // heroi — o numero dos guias de referencia com preview grande.
-#define G_L_ROW      (gRetrato() ? 120.0f : 80.0f)
+#define G_L_ROW      (gRetrato() ? 120.0f : gVidro() ? 88.0f : 80.0f)
 #define G_L_CEL      (G_L_ROW - 8.0f)
-#define G_L_HEAD     44.0f     // cabecalho de categoria, discreto (22 px)
+#define G_L_HEAD     (gVidro() ? 60.0f : 44.0f)   // cabecalho de categoria (Home row title in the glass list)
 #define G_L_COL     400.0f
 #define G_L_FAIXA_X (G_AREA_X + G_L_COL + 8.0f)
 #define G_L_FAIXA_W (G_AREA_DIR - G_L_FAIXA_X)
@@ -199,7 +203,7 @@ static int gVidro(void);
 #define G_L_PASSO_MIN   30     // regua de meia em meia hora, como toda grade
 #define G_L_DESL_MAX   180     // ate 3 h a frente com DIREITA
 #define G_L_BASE    (NV_TELA_H - (gRetrato() ? 62.0f : gVidro() ? 84.0f : 0.0f))
-#define G_L_FADE     36.0f     // esmaecimento nas bordas da area rolavel
+#define G_L_FADE     (gVidro() ? 56.0f : 36.0f)   // esmaecimento nas bordas da area rolavel
 
 // --- cabecalho: chips de modo, addons e preview -----------------------------
 // CHIPS e nao pilulas: 40 px de altura e 22 px de fonte, contra os 48/25 de
@@ -207,7 +211,8 @@ static int gVidro(void);
 // linha do cabecalho e navegacao secundaria; o que pesa na tela e o heroi.
 #define G_TOPO_Y     32.0f
 #define G_TOPO_H     (gRetrato() ? 72.0f : 48.0f)
-#define G_CHIPS_Y    (G_TOPO_Y + G_TOPO_H + 16.0f)
+// Glass list: no screen title, the chips take the top row (Home has no title).
+#define G_CHIPS_Y    (gVidro() ? G_TOPO_Y : G_TOPO_Y + G_TOPO_H + 16.0f)
 #define G_CHIP_PAD   20.0f
 #define G_CHIP_TEXTO (gRetrato() ? TXT_V2_SEG : TXT_PG_ROTULO)
 static float gPreviewLargura(void) {
@@ -5758,6 +5763,24 @@ const char *guia_desc_livre(const char *desc, char *buf, size_t n) {
   return buf;
 }
 
+// Home look: how far the page fades into the picture from its left edge and
+// from its bottom (the logo and "loading" sit in what stays visible).
+#define G_V_VEU_ESQ  340.0f
+#define G_V_VEU_BASE 240.0f
+// Outlined chip of the hero (versions, favourite): Home's quiet secondary
+// pill, 32 px high like the LIVE badge next to it. Returns the width.
+static float gChipContorno(const char *rot, const char *fim, float x, float y, float a) {
+  char t[96];
+  TxtLinha l;
+  GfxRect r;
+  snprintf(t, sizeof t, "%s%s%s", rot, fim ? "  " : "", fim ? fim : "");
+  l = txt_linha(TXT_PG_ROTULO, t, 214, 214, 218, 255);
+  r = (GfxRect){ x, y, (float)l.w + 26.0f, 32.0f };
+  gfx_anel(r, 8.0f / r.h, 1.5f, 1, 1, 1, 0.26f * a);
+  txt_desenhar_alpha(l, r.x + 13.0f, r.y + (r.h - (float)l.h) * 0.5f, a);
+  return r.w;
+}
+
 // O HEROI: a ficha do canal focado a esquerda e o preview 16:9 a direita.
 //
 // `tFoco` e o instante que o foco aponta: agora, ou o comeco da janela quando
@@ -5812,7 +5835,7 @@ static void desenharHero(float a, time_t agoraT, time_t tFoco) {
   if (sessao && focado && !anda && video_pronto() && !player_carregando()) {
     gfx_furo_raio(pv, raio);
     // Selo sobre o video: GL opaco por cima do furo aparece por cima do plano.
-    { float badgeX = pv.x + (gRetrato() || gVidro() ? 24.0f : 240.0f);
+    if (!gVidro()) { float badgeX = pv.x + (gRetrato() ? 24.0f : 240.0f);
       float badgeY = pv.y + pv.h - (gRetrato() ? 52.0f : gVidro() ? 60.0f : 180.0f);
       guia_selo_ao_vivo(badgeX, badgeY, a); }
   } else if (anda && focado) {
@@ -5826,6 +5849,7 @@ static void desenharHero(float a, time_t agoraT, time_t tFoco) {
     { float lw = gRetrato() ? fminf(320.0f, pv.w - 40.0f) : 320.0f;
       float lh = gRetrato() ? fminf(170.0f, fmaxf(20.0f, pv.h - 120.0f)) : 170.0f;
       GfxRect cx = { pv.x + (pv.w - lw) * 0.5f, pv.y + (pv.h - lh) * 0.5f - (pv.h < 200.0f ? 24.0f : 12.0f), lw, lh };
+      if (gVidro()) { cx.x = pv.x + G_V_VEU_ESQ + (pv.w - G_V_VEU_ESQ - lw) * 0.5f; cx.y = pv.y + (pv.h - G_V_VEU_BASE - lh) * 0.5f + 40.0f; }
       logoNaCaixa(pc, cx, fminf(300.0f, lw), fminf(150.0f, lh), G_LOGO_CLARO, pc == c ? ha : a); }
     // "Carregando" so enquanto ha algo a caminho: sem sessao nem pedido,
     // dizer "carregando" seria mentir para sempre.
@@ -5833,29 +5857,54 @@ static void desenharHero(float a, time_t agoraT, time_t tFoco) {
       TxtLinha t = gRetrato()
         ? txt_linha_corta(TXT_DET_META2, i18n("carregando canal…"), 160, 163, 172, 255, pv.w - 40.0f)
         : txt_linha(TXT_DET_META2, i18n("carregando canal…"), 160, 163, 172, 255);
-      txt_desenhar_alpha(t, pv.x + (pv.w - (float)t.w) * 0.5f, pv.y + pv.h - 60.0f, a);
+      if (gVidro()) txt_desenhar_alpha(t, pv.x + G_V_VEU_ESQ + (pv.w - G_V_VEU_ESQ - (float)t.w) * 0.5f,
+                                       pv.y + pv.h - G_V_VEU_BASE + 20.0f, a);
+      else txt_desenhar_alpha(t, pv.x + (pv.w - (float)t.w) * 0.5f, pv.y + pv.h - 60.0f, a);
     }
   } }
-  // GLASS LIST: under the rounded preview, only who is on screen: logo, the
-  // channel name, and "category · number". No programme guide.
+  // HOME LOOK: the picture fades into the page like Home's artwork (left,
+  // bottom, and under the clock), then the focused channel is the hero at
+  // the top left: title, "Category · Channel N · FHD", then LIVE, the number
+  // of versions (RIGHT opens them) and the favourite mark. No programme guide.
   if (gVidro()) {
-    char meta[200];
-    float ix = pv.x + 4.0f, iy = pv.y + pv.h + 28.0f, tx;
-    GfxRect lg = { ix, iy, 96.0f, 56.0f };
-    gfx_cor(lg, 0.2f, 1, 1, 1, 0.07f * ha);
-    logoNaCaixa(c, (GfxRect){ lg.x + 6.0f, lg.y + 4.0f, lg.w - 12.0f, lg.h - 8.0f }, 80.0f, 44.0f, G_LOGO_CLARO, ha);
-    tx = lg.x + lg.w + 22.0f;
-    { char limpo[200], ver[24];
-      if (mgOk && gJuntar()) gNomeLimpo(c->nome, limpo, sizeof limpo); else snprintf(limpo, sizeof limpo, "%s", c->nome);
-      ver[0] = 0; if (mgOk && gJuntar()) gVersaoRotulo(c->nome, ver, sizeof ver);
-      TxtLinha n = txt_linha_corta(TXT_TITULO2, limpo, 246, 247, 250, 255, pv.x + pv.w - tx);
-      if (ver[0]) snprintf(meta, sizeof meta, "%s  \xc2\xb7  %d  \xc2\xb7  %s", c->cat >= 0 ? i18n(cats[c->cat].nome) : "", c->numero, ver);
-      else snprintf(meta, sizeof meta, "%s  \xc2\xb7  %d", c->cat >= 0 ? i18n(cats[c->cat].nome) : "", c->numero);
-      TxtLinha m = txt_linha_corta(TXT_DET_META2, meta, 150, 153, 162, 255, pv.x + pv.w - tx);
-      float bloco = (float)n.h + 4.0f + (float)m.h;
-      float by = iy + (lg.h - bloco) * 0.5f;
-      txt_desenhar_alpha(n, tx, by, ha);
-      txt_desenhar_alpha(m, tx, by + (float)n.h + 4.0f, ha); }
+    char limpo[200], ver[24], meta[240];
+    float hx = G_AREA_X, hw = G_V_LISTA_W, hy = G_V_HERO_Y, cy;
+    int nv;
+    gRowL = focoLin; gRowI = focoCol;     // gVersoesDaLinha reads the row being drawn
+    nv = mgOk && gJuntar() ? gVersoesDaLinha() : 1;
+    gfx_rect((GfxRect){pv.x, pv.y, G_V_VEU_ESQ, pv.h}, 0, GFX_VEU_CSS, 0, 2, 1, 0,
+             NV_COR_FUNDO_R, NV_COR_FUNDO_G, NV_COR_FUNDO_B, a);
+    gfx_rect((GfxRect){pv.x, pv.y + pv.h - G_V_VEU_BASE, pv.w, G_V_VEU_BASE}, 0, GFX_VEU_CSS, 0, 0, 1, 0,
+             NV_COR_FUNDO_R, NV_COR_FUNDO_G, NV_COR_FUNDO_B, a);
+    gfx_rect((GfxRect){pv.x, pv.y, pv.w, 130.0f}, 0, GFX_VEU_CSS, 0, 1, 1, 0,
+             NV_COR_FUNDO_R, NV_COR_FUNDO_G, NV_COR_FUNDO_B, 0.85f * a);
+    if (mgOk && gJuntar()) gNomeLimpo(c->nome, limpo, sizeof limpo); else snprintf(limpo, sizeof limpo, "%s", c->nome);
+    ver[0] = 0; if (mgOk && gJuntar()) gVersaoRotulo(c->nome, ver, sizeof ver);
+    // Home's hero title (76 px bold); a name that does not fit drops to 56 px
+    // before it is cut, so "SuperSport 2" and its number stay readable.
+    { TxtLinha t = txt_linha(TXT_TITULO1, limpo, 244, 243, 247, 255);
+      float ty = hy;
+      if ((float)t.w > hw) { t = txt_linha_corta(TXT_TITULO2, limpo, 244, 243, 247, 255, hw); ty += 12.0f; }
+      txt_desenhar_alpha(t, hx, ty, ha); }
+    { size_t u = (size_t)snprintf(meta, sizeof meta, "%s", c->cat >= 0 ? i18n(cats[c->cat].nome) : "");
+      if (c->numero > 0)
+        u += (size_t)snprintf(meta + u, sizeof meta - u, "%s%s %d", u ? "  \xe2\x80\xa2  " : "", i18n("Canal"), c->numero);
+      if (ver[0] && u < sizeof meta) snprintf(meta + u, sizeof meta - u, "%s%s", u ? "  \xe2\x80\xa2  " : "", ver);
+      TxtLinha m = txt_linha_corta(TXT_HERO_META, meta, 178, 178, 182, 255, hw);
+      txt_desenhar_alpha(m, hx, hy + 100.0f, ha); }
+    cy = hy + 144.0f;
+    { float cx = hx;
+      cx += guia_selo_ao_vivo(cx, cy, ha) + 12.0f;
+      if (nv > 1) {
+        char rot[48];
+        snprintf(rot, sizeof rot, i18n("%d versões"), nv);
+        cx += gChipContorno(rot, "\xe2\x80\xba", cx, cy, ha) + 12.0f;
+      }
+      if (c->fav) {
+        char rot[64];
+        snprintf(rot, sizeof rot, "\xe2\x98\x85  %s", i18n("Favorito"));
+        gChipContorno(rot, NULL, cx, cy, ha);
+      } }
     (void)agoraT; (void)tFoco; (void)epg; (void)noAr; (void)proxY; (void)x; (void)w; (void)y;
     return;
   }
@@ -6057,6 +6106,9 @@ static void materialPainelGuia(GfxRect p, float raioPx, float a) {
   float raio = raioPx / (p.h > 1.0f ? p.h : 1.0f);
   gfx_rect((GfxRect){ p.x - 18.0f, p.y - 8.0f, p.w + 36.0f, p.h + 40.0f },
            0, GFX_SOMBRA, 1.0f, 0, 0, 0.5f, 0, 0, 0, 0.38f * a);
+  // Home look: the hero title is 76 px; through clear glass it read as a
+  // second layer of text, so the glass sits on a dark base there.
+  if (ajustes_vidro() && gVidro()) gfx_cor(p, raio, 0.047f, 0.047f, 0.052f, 0.97f * a);
   if (ajustes_vidro()) gfx_vidro_folha(p, raio, a);
   else gfx_cor(p, raio, 0.071f, 0.075f, 0.086f, 0.98f * a);
 }
@@ -6227,8 +6279,8 @@ static void haQuanto(long long quando, char *d, size_t n) {
 }
 
 static void desenharFontes(float a) {
-  float x0 = gVidro() ? G_PREVIEW_X : G_INFO_X, xm = gVidro() ? G_PREVIEW_X + G_PREVIEW_W : G_INFO_X + G_INFO_W,
-        y = gRetrato() ? G_HERO_Y + G_INFO_H - 112.0f : gVidro() ? G_PREVIEW_Y + G_PREVIEW_H + 116.0f : G_PREVIEW_H - 82.0f,
+  float x0 = gVidro() ? G_PREVIEW_X + G_V_VEU_ESQ : G_INFO_X, xm = gVidro() ? G_AREA_DIR : G_INFO_X + G_INFO_W,
+        y = gRetrato() ? G_HERO_Y + G_INFO_H - 112.0f : gVidro() ? G_PREVIEW_Y + G_PREVIEW_H + 44.0f : G_PREVIEW_H - 82.0f,
         h = 40.0f, x, alvo, xf = 0, wf = 0;
   float xs[2 + G_MAX_LTV], ws[2 + G_MAX_LTV];
   char rot[2 + G_MAX_LTV][96];
@@ -6331,6 +6383,9 @@ static void desenharFontes(float a) {
     char it[FOP_N][120];
     GfxRect c = { xf > 0 ? xf : x0, y + h + 10.0f, 560.0f, 52.0f + FOP_N * 58.0f };
     int k;
+    // The source bar sits low in the Home look: open above it when the panel
+    // would run off the bottom of the screen.
+    if (c.y + c.h > NV_TELA_H - 24.0f) c.y = y - 10.0f - c.h;
     snprintf(it[FOP_AZ], sizeof it[0], "%s: %s", i18n("Ordem dos grupos"),
              p && p->az ? "A\xe2\x80\x93Z" : i18n("do provedor"));
     { size_t u = (size_t)snprintf(it[FOP_FUSO], sizeof it[0], i18n("Horário da grade: %+.1f h"),
@@ -7154,36 +7209,38 @@ static void desenharLinhaLista(GCanal *c, float y, int focada, float a,
 #endif
   int textoRetrato = gRetrato() && h >= 70.0f;
   float raioB = 10.0f / h;
-  // GLASS LIST ROW: number, logo tile and the channel name, nothing else. The
-  // focused row is a white pill (drawn by the caller) with dark text.
+  // GLASS LIST ROW, Home look: number, a 16:9 logo tile, the channel name and,
+  // on the right, the quality badge, the favourite star and "3 ›" when the
+  // channel has versions. The focused row is a dark surface with the Home
+  // focus ring (drawn by the caller), so every text stays light.
   if (gVidro()) {
-    float lx = G_AREA_X + 12.0f, wl = G_V_LISTA_W;
-    GfxRect cx = { G_AREA_X + 78.0f, y + (h - 48.0f) * 0.5f, 84.0f, 48.0f };
+    float lx = G_AREA_X, wl = G_V_LISTA_W;
+    GfxRect cx = { G_AREA_X + 70.0f, y + (G_L_CEL - 63.0f) * 0.5f, 112.0f, 63.0f };
+    h = G_L_CEL;
     if (alvo) *alvo = (GfxRect){ G_AREA_X, y, wl, h };
     if (passo == 0) {
-      gfx_cor(cx, 0.22f, focada ? 0.86f : 1.0f, focada ? 0.865f : 1.0f, focada ? 0.88f : 1.0f,
-              (focada ? 1.0f : 0.07f) * a);
+      gfx_cor(cx, 10.0f / cx.h, 1.0f, 1.0f, 1.0f, (focada ? 0.10f : 0.06f) * a);
       return;
     }
     { char num[16];
-      int cn = focada ? 92 : 132, ct = focada ? 22 : 236;
+      int cn = focada ? 168 : 120;
       TxtLinha n, t;
       float nx;
       snprintf(num, sizeof num, "%d", c->numero);
-      n = txt_linha(TXT_ILHA_HORA, num, cn, cn, cn + 4, 255);
-      txt_desenhar_alpha(n, lx + 44.0f - (float)n.w, y + (h - (float)n.h) * 0.5f, a);
-      logoNaCaixa(c, (GfxRect){ cx.x + 4.0f, cx.y + 4.0f, cx.w - 8.0f, cx.h - 8.0f }, 72.0f, 38.0f, G_LOGO_CLARO, a);
-      nx = cx.x + cx.w + 22.0f;
+      n = txt_linha(TXT_G19M, num, cn, cn, cn + 4, 255);
+      txt_desenhar_alpha(n, lx + 50.0f - (float)n.w, y + (h - (float)n.h) * 0.5f, a);
+      logoNaCaixa(c, (GfxRect){ cx.x + 6.0f, cx.y + 5.0f, cx.w - 12.0f, cx.h - 10.0f }, 96.0f, 50.0f, G_LOGO_CLARO, a);
+      nx = cx.x + cx.w + 24.0f;
       { // CHANNEL VERSIONS: clean name, the playing version's badge, "3 >".
         char limpo[200], ver[24], cnt[16];
         int nv = gVersoesDaLinha();
-        float dir = G_AREA_X + wl - (focada ? 62.0f : 14.0f), bw = 0.0f;
+        float dir = lx + wl - 20.0f;
         TxtLinha tc = {0}, tb = {0}, st = {0};
         if (mgOk && gJuntar()) gNomeLimpo(c->nome, limpo, sizeof limpo); else snprintf(limpo, sizeof limpo, "%s", c->nome);
         ver[0] = 0; if (mgOk && gJuntar()) gVersaoRotulo(c->nome, ver, sizeof ver);
         if (nv > 1) {
           snprintf(cnt, sizeof cnt, "%d \xe2\x80\xba", nv);
-          tc = txt_linha(TXT_DET_META2, cnt, focada ? 70 : 170, focada ? 70 : 172, focada ? 78 : 180, 255);
+          tc = txt_linha(TXT_DET_META2, cnt, focada ? 226 : 150, focada ? 226 : 152, focada ? 232 : 160, 255);
           dir -= (float)tc.w;
           txt_desenhar_alpha(tc, dir, y + (h - (float)tc.h) * 0.5f, a);
 #ifdef NV_TOUCH_UI
@@ -7191,29 +7248,26 @@ static void desenharLinhaLista(GCanal *c, float y, int focada, float a,
             ponteiro_alvo_faixa(dir - 12.0f, y, (float)tc.w + 24.0f, h, G_L_TOPO - 8.0f, G_L_BASE,
                                 NULL, ponteiroVersoes, gRowL, gRowI);
 #endif
-          dir -= 16.0f;
+          dir -= 18.0f;
         }
         if (c->fav) {
-          st = txt_linha(TXT_DET_META2, "\xe2\x98\x85", focada ? 200 : 255, focada ? 150 : 214, focada ? 20 : 90, 255);
+          st = txt_linha(TXT_DET_META2, "\xe2\x98\x85", 255, 214, 90, 255);
           dir -= (float)st.w;
           txt_desenhar_alpha(st, dir, y + (h - (float)st.h) * 0.5f, a);
-          dir -= 14.0f;
+          dir -= 16.0f;
         }
         if (ver[0]) {
-          tb = txt_linha(TXT_MINI, ver, focada ? 60 : 190, focada ? 60 : 192, focada ? 68 : 200, 255);
-          bw = (float)tb.w + 14.0f;
+          GfxRect br;
+          tb = txt_linha(TXT_MINI, ver, focada ? 236 : 190, focada ? 236 : 192, focada ? 240 : 200, 255);
+          br = (GfxRect){ dir - (float)tb.w - 16.0f, y + (h - (float)tb.h - 8.0f) * 0.5f, (float)tb.w + 16.0f, (float)tb.h + 8.0f };
+          gfx_anel(br, 6.0f / br.h, 1.5f, 1, 1, 1, (focada ? 0.42f : 0.24f) * a);
+          txt_desenhar_alpha(tb, br.x + 8.0f, br.y + 4.0f, a);
+          dir = br.x - 16.0f;
         }
-        t = txt_linha_corta(TXT_CW_TITULO, limpo, ct, ct, ct + (focada ? 4 : 2), 255,
-                            fmaxf(40.0f, dir - nx - (bw > 0.0f ? bw + 14.0f : 0.0f)));
+        t = txt_linha_corta(focada ? TXT_G28B : TXT_CW_TITULO, limpo, focada ? 250 : 222, focada ? 250 : 223,
+                            focada ? 252 : 228, 255, fmaxf(40.0f, dir - nx));
         txt_desenhar_alpha(t, nx, y + (h - (float)t.h) * 0.5f, a);
-        if (ver[0]) {
-          GfxRect br = { nx + (float)t.w + 14.0f, y + (h - (float)tb.h - 8.0f) * 0.5f, bw, (float)tb.h + 8.0f };
-          gfx_cor(br, 0.3f, focada ? 0 : 1, focada ? 0 : 1, focada ? 0 : 1, (focada ? 0.10f : 0.12f) * a);
-          txt_desenhar_alpha(tb, br.x + 7.0f, br.y + 4.0f, a);
-        }
       }
-      if (focada)
-        gfx_icone((GfxRect){ G_AREA_X + wl - 42.0f, y + (h - 26.0f) * 0.5f, 26.0f, 26.0f }, "play", 0.10f, 0.10f, 0.12f, a);
     }
     (void)agoraT; (void)ini; (void)tFoco; (void)agoraX;
     return;
@@ -8303,7 +8357,8 @@ void guia_desenhar(Uint32 agora) {
                            overlay ? i18n("Guia de canais") : i18n(NV_GUIA_SO_CANAIS ? "TV ao vivo" : "Guia TV"),
                            243, 242, 239, 255);
     float sx = G_AREA_X + (float)t.w + 20.0f;
-    txt_desenhar_alpha(t, G_AREA_X, G_TOPO_Y + (G_TOPO_H - (float)t.h) * 0.5f, a);
+    // Home look: no screen title; the chips own the top row.
+    if (!gVidro()) txt_desenhar_alpha(t, G_AREA_X, G_TOPO_Y + (G_TOPO_H - (float)t.h) * 0.5f, a);
     if (estado == G_BAIXANDO && nCanais > 0)   // lista do cache na tela, rede atras
       snprintf(sub, sizeof sub, i18n("%d canais · %d categorias · atualizando…"), nCanais, nCats);
     else if (estado == G_BAIXANDO)
@@ -8383,7 +8438,19 @@ void guia_desenhar(Uint32 agora) {
         if (y + bloco < G_L_TOPO - 8.0f) { y += bloco; continue; }
         // Cabecalho de categoria DISCRETO: 22 px em cinza. A categoria e
         // contexto da lista, nao titulo — quem manda na tela e o heroi.
-        if (passo == 1) {
+        if (passo == 1 && gVidro()) {
+          // Home row title: the category in 33 px bold (white for the one in
+          // focus, dimmer for the rest) and its channel count in grey.
+          char cnt[24];
+          int at = l == focoLin;
+          TxtLinha t = txt_linha_corta(TXT_ROW_TITULO, linhaNome(l), at ? 244 : 190, at ? 243 : 192,
+                                       at ? 247 : 198, 255, G_V_LISTA_W - 120.0f), tn;
+          float ty = y + G_L_HEAD - 14.0f - (float)t.h;
+          snprintf(cnt, sizeof cnt, "%d", n);
+          tn = txt_linha(TXT_HERO_META, cnt, 125, 125, 130, 255);
+          txt_desenhar_alpha(t, G_AREA_X, ty, a);
+          txt_desenhar_alpha(tn, G_AREA_X + (float)t.w + 16.0f, ty + (float)t.h - (float)tn.h - 3.0f, a);
+        } else if (passo == 1) {
           char cab[140];
           int at = 0;
           TxtLinha t;
@@ -8405,9 +8472,11 @@ void guia_desenhar(Uint32 agora) {
             int d = l == focoLin ? abs(i - focoCol) : 6;
             float dimV = foc ? 1.0f : fmaxf(0.38f, 0.82f - 0.11f * (float)d);
             if (passo == 0 && foc) {
-              float s = 5.0f;
-              GfxRect pill = { G_AREA_X - 8.0f - s, y - 2.0f - s, G_V_LISTA_W + 16.0f + 2.0f * s, G_L_CEL + 4.0f + 2.0f * s };
-              gfx_cor(pill, 18.0f / pill.h, 0.945f, 0.945f, 0.955f, a);
+              // Home focus: a lifted dark surface inside the accent ring (the
+              // ring follows Settings' focus border, like Home's cards).
+              GfxRect sup = { G_AREA_X - 12.0f, y - 2.0f, G_V_LISTA_W + 24.0f, G_L_CEL + 4.0f };
+              gfx_cor(sup, 14.0f / sup.h, 0.118f, 0.118f, 0.126f, a);
+              if (ajustes_borda_foco()) gfx_anel_fora(sup, 14.0f / sup.h, 2.0f, 3.0f, ar, ag, ab, a);
             }
             gRowL = l; gRowI = i;
             desenharLinhaLista(linhaItem(l, i), y, foc, a * dimV, agoraT, ini, tFoco,

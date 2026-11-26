@@ -483,6 +483,24 @@ int main(int argc, char **argv) {
     if (rolL < 0.0f) rolL = 0.0f; }
   snprintf(nome, sizeof nome, "%s-lista-sem-epg.bmp", saida);
   capturaTela(nome, w, 1);
+  // Channels-only list, Home look: the hold-OK options panel and the version
+  // picker (RIGHT) over the hero, on the first channel that has versions.
+  if (NV_GUIA_SO_CANAIS) {
+    int l, i, achou = 0;
+    vpAbrir();
+    snprintf(nome, sizeof nome, "%s-lista-opcoes.bmp", saida);
+    capturaTela(nome, w, 1);
+    vpAberto = 0;
+    for (l = 0; l < nLinhas() && !achou; l++)
+      for (i = 0; i < linhaN(l) && !achou; i++)
+        if (vsAbrirEm(l, i)) { focoLin = l; focoCol = i; achou = 1; }
+    if (achou) {
+      snprintf(nome, sizeof nome, "%s-lista-versoes.bmp", saida);
+      capturaTela(nome, w, 1);
+      vsAberto = 0;
+    }
+    focoLin = 1; focoCol = 1;
+  }
 
   // BARRA DE FONTES (M3): foco no chip do Xtream, com a linha da fonte.
   focoLin = 0; focoCol = 0; rolL = 0.0f; focoAnelOk = 0;

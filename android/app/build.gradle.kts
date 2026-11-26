@@ -8,7 +8,7 @@ plugins {
 val lite = (findProperty("nuvio.apkLite") as String?) == "1"
 // NUVIO TV (-Pnuvio.nuvioTv=1): the Live TV-only app. Own package, so it
 // installs next to Nuvio; label and icons come from tools/nuviotv-android.sh.
-val nuvioTv = (findProperty("nuvio.nuvioTv") as String?) == "1"
+val nuvioTv = (findProperty("nuvio.nuvioTv") as String?) == "1" || System.getenv("NUVIO_TV") == "1"
 if (lite) layout.buildDirectory.set(file("build-lite"))
 val raiz = rootProject.projectDir.parentFile                         // raiz do repo
 val cache = file(System.getProperty("user.home") + "/.cache/nuvio-android")

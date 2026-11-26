@@ -15,7 +15,10 @@ static void durable(const char *data) {
   const char *keep[]={"ltv-urls.txt","ltv-urls-p2.txt","ltv-fontes.txt",
     "ltv-fontes-p2.txt","ltv-fav.txt","ltv-fav-p2.txt","ltv-epgmapa.txt",
     "ltv-epgmapa-p2.txt","profiles.txt","accounts.txt","progress.txt",
-    "addons.txt","plugins-p1.txt","epg-mappings.txt","plugins-config.txt"};
+    "addons.txt","plugins-p1.txt","epg-mappings.txt","plugins-config.txt",
+    /* The saved Live TV list: evicting it made Live TV load from zero. */
+    "ltv-indice.txt","ltv-indice-p1.txt","ltv-xta00000001-p1.bin","ltv-xt-p1.bin",
+    "ltv-a1b2c3d4-p1.bin","ltv-ma0000000a-p2.bin"};
   char p[1200];
   for (unsigned i=0;i<sizeof keep/sizeof *keep;i++) {
     snprintf(p,sizeof p,"%s/%s",data,keep[i]); file(p,123,1);
@@ -29,6 +32,26 @@ static void durable(const char *data) {
     assert(!nv_android_cache_name(keep[i]));
   }
   puts("Durable storage survives migration and clear PASS");
+}
+/* An older build left the Live TV list in the cache: startup brings it to the
+ * data folder before any trim; a copy already in the data folder wins. */
+static void livelists(const char *root, const char *data) {
+  char c[1200], d[1200], o[1200]; struct stat st;
+  snprintf(c,sizeof c,"%s/ltv-indice-p1.txt",root); file(c,11,1);
+  snprintf(o,sizeof o,"%s/ltv-xta00000001-p1.bin",root); file(o,222,1);
+  snprintf(d,sizeof d,"%s/ltv-xta00000001-p1.bin",data); file(d,333,5);
+  { char e[1200]; snprintf(e,sizeof e,"%s/epg-al1.xml",root); file(e,44,1); }
+  assert(nv_android_cache_keep_live_lists(data)==1);
+  snprintf(c,sizeof c,"%s/ltv-indice-p1.txt",data); assert(!stat(c,&st) && st.st_size==11);
+  assert(!stat(d,&st) && st.st_size==333);           /* newer data copy kept */
+  assert(access(o,F_OK));                            /* stale cache copy gone */
+  { char e[1200]; snprintf(e,sizeof e,"%s/epg-al1.xml",root); assert(!access(e,F_OK)); }
+  snprintf(o,sizeof o,"%s/huge.tmp",root); file(o,90L<<20,2);
+  nv_android_cache_trim(NV_ANDROID_CACHE_BYTES);
+  assert(!stat(c,&st) && st.st_size==11);
+  assert(nv_android_cache_clear());
+  assert(!stat(c,&st) && !stat(d,&st));
+  puts("Live TV list leaves the cache and survives trim and clear PASS");
 }
 static void apk(const char *root) {
   char p[1200], other[1200]; struct stat st;
@@ -53,6 +76,7 @@ int main(int argc, char **argv) {
   setenv("NUVIO_CACHE",root,1);
   if (argc>2) {
     if (!strcmp(argv[2],"durable")) durable(data);
+    else if (!strcmp(argv[2],"livelists")) livelists(root,data);
     else apk(root);
     return 0;
   }

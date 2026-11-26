@@ -2715,7 +2715,19 @@ static int cacheLer(void) {
   ltv_urls_carregar(perfis_ativo());
   cacheNomeIndice(nome, sizeof nome);
   t = dados_ler(nome);
-  if (!t) return 0;
+  // No index (older Android builds kept it in the evictable cache): the
+  // configured accounts say which saved lists to read, in account order.
+  if (!t) {
+    IptvConta cs[IPTV_MAX_CONTAS];
+    int nc = iptv_contas(cs, IPTV_MAX_CONTAS);
+    size_t cap = (size_t)(nc > 0 ? nc : 1) * (LTV_CHAVE + 1) + 1, u = 0;
+    if (nc <= 0 || !(t = malloc(cap))) return 0;
+    t[0] = 0;
+    for (int i = 0; i < nc; i++) {
+      char ch[LTV_CHAVE]; contaChave(&cs[i], ch, sizeof ch);
+      u += (size_t)snprintf(t + u, cap - u, "%s\n", ch);
+    }
+  }
   fltGarantir(); sFltLive = fltLive;categoriasCopiar();
   stagingZerar();
   sTeto = tetoCarga;

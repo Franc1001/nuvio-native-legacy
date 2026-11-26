@@ -18,7 +18,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [live-tv-v2, live-tv-categories, iptv-backup-servers]
+    branches: [live-tv-v2, live-tv-v3, live-tv-categories, iptv-backup-servers]
     paths-ignore:
       - "docs/**"
       - "**/*.md"
@@ -52,6 +52,11 @@ jobs:
           bash tests/stalker_portal.sh
           bash tests/catcanalvazio.sh
           bash tests/addonslocais.sh
+          # The saved Live TV list must survive the Android cache budget.
+          t=$(mktemp -d)
+          cc -D_POSIX_C_SOURCE=200809L -DNV_CACHE_TEST -Isrc tests/android_storage.c src/androidcache.c -pthread -o "$t/st"
+          for r in durable livelists apk; do mkdir "$t/$r"; "$t/st" "$t/$r" "$r"; done
+          "$t/st" "$t"
 
       - uses: actions/setup-java@v4
         with:

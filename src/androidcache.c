@@ -17,13 +17,21 @@ const char *nv_android_cache_dir(void) {
   const char *p = getenv("NUVIO_CACHE");
   return p ? p : "";
 }
+/* THE SAVED LIVE TV LIST IS NOT CACHE (owner, 26/11/2026: "it is better to
+ * stay saved because I don't change IPTV account"). It used to live here, and
+ * the 80 MB budget evicts the OLDEST file first: the list is written once per
+ * load, then posters and EPG files pile up after it, so it was the first thing
+ * thrown away and Live TV came back empty, loading from zero. It now stays in
+ * the data folder; these names only say where older builds left it. */
+static const char *listasVivas[]={"ltv-indice.txt","ltv-indice-p[0-9]*.txt","ltv-*.bin"};
+static int listaViva(const char *n) {
+  for (unsigned i=0;i<sizeof listasVivas/sizeof *listasVivas;i++)
+    if (!fnmatch(listasVivas[i],n,FNM_PATHNAME)) return 1;
+  return 0;
+}
 int nv_android_cache_name(const char *n) {
   /* Only regenerated file formats belong here; unknown names stay durable. */
   static const char *files[]={"epg-*.xml","epg-*.xml.gz","epg-*.ts","epg-x-*-p[0-9]*.bin",
-    "ltv-indice.txt","ltv-indice-p[0-9]*.txt",
-    "ltv-xt.bin","ltv-xt-p[0-9]*.bin","ltv-st.bin","ltv-st-p[0-9]*.bin",
-    "ltv-[max][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].bin",
-    "ltv-[max][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-p[0-9]*.bin",
     "m3u-cache-p[0-9]*.txt","plugins-c-*.txt","mkvass-*.ass",
     "noticias-*.txt","noticias2-*.txt","extras-*.txt","meta-*.txt",
     "ficha-*.json","serieaud-*.txt","catalogo-*.bin",
@@ -123,6 +131,26 @@ void nv_android_cache_migrate(const char *data) {
   }
   closedir(d);
 }
+/* Builds before 26/11/2026 kept the Live TV list in the cache folder: bring
+ * what is still there to the data folder, so the update does not cost one
+ * more load from zero. A copy already in the data folder wins (it is newer).
+ * Runs before the startup trim, which could still evict it. */
+int nv_android_cache_keep_live_lists(const char *data) {
+  const char *root=nv_android_cache_dir();
+  DIR *d; struct dirent *e; int movidos=0;
+  if (!root[0] || !data || !data[0] || !strcmp(root,data) || !(d=opendir(root))) return 0;
+  while ((e=readdir(d))) {
+    char de[1200], para[1200]; struct stat st;
+    if (!listaViva(e->d_name)) continue;
+    if (snprintf(de,sizeof de,"%s/%s",root,e->d_name)>=(int)sizeof de ||
+        snprintf(para,sizeof para,"%s/%s",data,e->d_name)>=(int)sizeof para) continue;
+    if (lstat(de,&st) || !S_ISREG(st.st_mode)) continue;
+    if (!access(para,F_OK)) { unlink(de); continue; }
+    if (!rename(de,para)) movidos++;
+  }
+  closedir(d);
+  return movidos;
+}
 #ifdef NV_ANDROID
 /* Native cache writers include direct stdio (EPG/trailers) and atomic
  * rename (images/catalogues). Enforce the same budget at both boundaries. */
@@ -160,4 +188,5 @@ void nv_android_cache_trim(uint64_t cap) { (void)cap; }
 int nv_android_cache_clear(void) { return 0; }
 void nv_android_cache_touch(const char *p) { (void)p; }
 void nv_android_cache_migrate(const char *p) { (void)p; }
+int nv_android_cache_keep_live_lists(const char *p) { (void)p; return 0; }
 #endif

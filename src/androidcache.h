@@ -10,4 +10,6 @@ void nv_android_cache_trim(uint64_t cap);
 int nv_android_cache_clear(void);
 void nv_android_cache_touch(const char *path);
 void nv_android_cache_migrate(const char *data);
+// Moves a Live TV list left in the cache folder by older builds to `data`.
+int nv_android_cache_keep_live_lists(const char *data);
 #endif

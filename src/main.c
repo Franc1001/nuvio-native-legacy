@@ -1132,6 +1132,9 @@ int main(int argc, char **argv) {
   NV_ETAPA("dados_iniciar");
   dados_iniciar(dirArte);
 #ifdef NV_ANDROID
+  // Before the trim: an older build left the Live TV list in the cache.
+  { int n = nv_android_cache_keep_live_lists(dados_dir());
+    if (n) { printf("[guia] lista da TV ao vivo trazida do cache: %d arquivo(s)\n", n); fflush(stdout); } }
   nv_android_cache_migrate(dados_dir());
   nv_android_cache_trim(NV_ANDROID_CACHE_BYTES);
 #endif

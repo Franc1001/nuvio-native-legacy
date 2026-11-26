@@ -6,6 +6,9 @@ plugins {
 // Tudo que vem de fora do projeto entra por propriedade (-P) que o
 // tools/android.sh passa; os padroes servem para abrir no Android Studio.
 val lite = (findProperty("nuvio.apkLite") as String?) == "1"
+// NUVIO TV (-Pnuvio.nuvioTv=1): the Live TV-only app. Own package, so it
+// installs next to Nuvio; label and icons come from tools/nuviotv-android.sh.
+val nuvioTv = (findProperty("nuvio.nuvioTv") as String?) == "1"
 if (lite) layout.buildDirectory.set(file("build-lite"))
 val raiz = rootProject.projectDir.parentFile                         // raiz do repo
 val cache = file(System.getProperty("user.home") + "/.cache/nuvio-android")
@@ -27,7 +30,7 @@ android {
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
-        applicationId = "space.nuvio.nativelegacy"
+        applicationId = if (nuvioTv) "space.nuvio.tv" else "space.nuvio.nativelegacy"
         minSdk = 24
         targetSdk = 35
         versionCode = vx * 10000 + vy * 100 + vz
@@ -37,6 +40,7 @@ android {
             cmake {
                 arguments += listOf(
                     "-DNV_APK_LITE=${if (lite) "ON" else "OFF"}",
+                    "-DNV_NUVIO_TV=${if (nuvioTv) "ON" else "OFF"}",
                     "-DANDROID_STL=c++_static",  // hidapi do SDL (hid.cpp) e C++
                     "-DNUVIO_RAIZ=$raiz",
                     "-DNUVIO_SDL_SRC=$sdlSrc",

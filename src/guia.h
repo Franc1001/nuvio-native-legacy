@@ -136,6 +136,10 @@ int  guia_variantes(const char *id, GuiaVariante *out, int max);
 // recebe o addon de cada um, `grupo` o nome da fileira.
 int  guia_canais_para_teste(GuiaVariante *out, char bases[][600], int max, char *grupo, size_t ng);
 int  guia_pediu_livetv_diag(void);
+// NUVIO TV (-DNV_NUVIO_TV): the Settings chip, and the account type picked on
+// the first-start screen (IPTV_XTREAM, IPTV_M3U, IPTV_STALKER; 0 = none).
+int  guia_pediu_ajustes(void);
+int  guia_pediu_nova_conta(void);
 // A fonte (chave ltv.h) do canal; 0 = fora da lista.
 int  guia_fonte_do_canal(const char *id, char *chave, size_t n);
 // O diagnostico grava formato/modo/proxy na fonte do canal testado (M8), e o

@@ -79,6 +79,9 @@ void ajustes_abrir_na_espera_fonte(void);
 // ganha "Voltar às novidades" e o Voltar dele devolve ao cartao
 // (ajustes_pediu_novidades, lido e zerado pelo app.c).
 void ajustes_abrir_no_guia(int daNovidades);
+// NUVIO TV first start: the next Settings opening lands on the new account
+// form for this type (IPTV_XTREAM, IPTV_M3U, IPTV_STALKER), keyboard open.
+void ajustes_abrir_nova_conta(int tipo);
 int  ajustes_pediu_novidades(void);
 // O guia esta na tela (por cima das ilhas de Ajustes).
 int  ajustes_guia_aberto(void);

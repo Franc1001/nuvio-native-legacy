@@ -335,9 +335,17 @@ static const char *ajVisualIcone(int op) {
 // 2.0.3: a ordem da tarefa (Assistir, Telas, Conta e sistema). AJS_TRAILERS nao
 // e mais categoria (Cartazes e trailers e uma so): fica depois de AJS_N como a
 // CENA das opcoes de trailer dentro de Cartazes e trailers.
+#ifdef NV_NUVIO_TV
+// NUVIO TV: the order of its own TELA (Live TV first). The categories it does
+// not have keep distinct numbers past AJS_N, so every `case` still compiles
+// and none of them is ever reached.
+enum { AJS_TVAOVIVO = 0, AJS_REPRODUCAO, AJS_IDIOMAS, AJS_APARENCIA, AJS_DESEMPENHO, AJS_SOBRE,
+       AJS_N, AJS_TRAILERS = AJS_N, AJS_FONTES, AJS_HOME, AJS_TITULO, AJS_CARTAZES, AJS_CONTAS };
+#else
 enum { AJS_REPRODUCAO = 0, AJS_IDIOMAS, AJS_FONTES, AJS_TVAOVIVO,
        AJS_HOME, AJS_APARENCIA, AJS_TITULO, AJS_CARTAZES,
        AJS_CONTAS, AJS_DESEMPENHO, AJS_SOBRE, AJS_N, AJS_TRAILERS = AJS_N };
+#endif
 static float ajPreviaHome(float x, float y, float w);
 static float ajPreviaHomeArte(float x, float y, float w, int arte);
 static const char *ajTituloN(int n);
@@ -354,6 +362,17 @@ static TxtEstilo ajEstiloPxS(float px, int forte) { return ajEstiloPx(px < 6.0f 
 #define AJ_ARTE_BLOCOS 10
 // Os blocos de "Mais opcoes" (depois do MAIS() da categoria) repetem a arte do
 // bloco basico de mesmo nome: e a mesma parte do app, so que tecnica.
+#ifdef NV_NUVIO_TV
+static const signed char AJ_ARTE_SEC[AJS_N + 1][AJ_ARTE_BLOCOS] = {
+  {  2, 19, 14, 14, 19,  5, -1, -1, -1, -1 },   // TV ao vivo: Contas, Guia de TV, Se o canal nao abre; Mais: canal, guia, addons
+  { 18, -1, -1, -1, -1, -1, -1, -1, -1, -1 },   // Reproducao: Som e video desta TV
+  { 21, -1, -1, -1, -1, -1, -1, -1, -1, -1 },   // Idiomas e legendas: Idiomas
+  {  9, 38,  6,  9, -1, -1, -1, -1, -1, -1 },   // Aparencia: Cores e vidro, Texto e tamanho, Movimento e relogio; Mais
+  { 26, -1, -1, -1, -1, -1, -1, -1, -1, -1 },   // Esta TV (Mais: Memoria)
+  { 30, 25, -1, -1, -1, -1, -1, -1, -1, -1 },   // Sobre e ajuda: App, Registro
+  { 15, 16, -1, -1, -1, -1, -1, -1, -1, -1 },   // (cena) Trailers
+};
+#else
 static const signed char AJ_ARTE_SEC[AJS_N + 1][AJ_ARTE_BLOCOS] = {
   { 18,  7, 22, 32,  7, 18, 19, -1, -1, -1 },   // Reproducao: Imagem e som, Escolha da fonte, Durante e depois, Miniatura; Mais: fonte, som e video, P2P
   { 21, 34, 24, 21, -1, -1, -1, -1, -1, -1 },   // Idiomas e legendas: Idiomas, Legenda principal, Segunda legenda; Mais: idiomas
@@ -368,6 +387,7 @@ static const signed char AJ_ARTE_SEC[AJS_N + 1][AJ_ARTE_BLOCOS] = {
   { 30, 25, -1, -1, -1, -1, -1, -1, -1, -1 },   // Sobre e ajuda: (guia e) App, Registro
   { 15, 16, -1, -1, -1, -1, -1, -1, -1, -1 },   // (cena) Trailers: Onde toca, Som e imagem
 };
+#endif
 static int ajCenaArteN(int sec) {
   return sec >= 0 && sec <= AJS_N ? AJ_ARTE_SEC[sec][0] : 12;
 }

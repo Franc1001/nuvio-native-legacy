@@ -62,6 +62,7 @@
 #include "arteescolha.h"
 #include "vertudo.h"
 #include "guia.h"
+#include "iptvfontes.h"   /* NUVIO TV: first account -> back to Live TV */
 #include "livetvdiag.h"
 #include "proxyts.h"
 #include "webosver.h"
@@ -888,7 +889,11 @@ static int saiuPorEsquerda, saiuPorCima;   // a ultima tecla foi ESQUERDA ou CIM
 // um canal minimizado. Manter a regra aqui evita que cada tela invente sua
 // propria nocao de PiP/Guia.
 static int sidebar_permitida(void) {
+#ifdef NV_NUVIO_TV
+  return 0;   // NUVIO TV: Live TV and Settings only, no Home menu
+#else
   return tela != TELA_GUIA && !player_mini_ativo();
+#endif
 }
 #ifdef NV_TOUCH_UI
 static int sidebarToquePode(void) {
@@ -5120,6 +5125,38 @@ void app_atualizar(float dt, Uint32 agora) {
   // O fundo das listras (login e escolha de perfil) sai da memoria quando a
   // pessoa passa das duas telas. Sem textura carregada, e um teste e nada mais.
   login_soltar();
+#ifdef NV_NUVIO_TV
+  // NUVIO TV HAS NO HOME: wherever the app would land on it (start, profile
+  // chosen, a screen closed), it lands on Live TV, before the frame is drawn.
+  if (tela == TELA_HOME && !detail_aberto()) {
+    trocarTela(TELA_GUIA);
+    menu_definir_destino(MENU_GUIA);
+  }
+  // Settings from the Live TV chip, or straight on the new account form from
+  // the first-start screen.
+  if (tela == TELA_GUIA && guia_pediu_ajustes()) {
+    trocarTela(TELA_AJUSTES); menu_definir_destino(MENU_AJUSTES);
+  }
+  { static int primeiraConta;
+    int tipo = tela == TELA_GUIA ? guia_pediu_nova_conta() : 0;
+    if (tipo) {
+      ajustes_abrir_nova_conta(tipo);
+      primeiraConta = 1;
+      trocarTela(TELA_AJUSTES); menu_definir_destino(MENU_AJUSTES);
+    }
+    // The first account is saved: back to Live TV, where the list now loads
+    // (after the "saved" note had a moment on screen).
+    { static Uint32 salvaEm;
+      if (primeiraConta && tela == TELA_AJUSTES && iptv_contas(NULL, 0) > 0 && !teclado_aberto() &&
+          !registro_legal_aberto()) {
+        if (!salvaEm) salvaEm = agora ? agora : 1;
+        else if (agora - salvaEm >= 1200u) {
+          primeiraConta = 0; salvaEm = 0;
+          trocarTela(TELA_GUIA); menu_definir_destino(MENU_GUIA);
+        }
+      } else salvaEm = 0; }
+    if (tela != TELA_AJUSTES) primeiraConta = 0; }
+#endif
 
   // Um ciclo por vez, e so quando a conta existe. O passo e barato: sem fio
   // terminado ele nao faz nada.
@@ -5669,8 +5706,15 @@ void app_atualizar(float dt, Uint32 agora) {
         menu_definir_destino(MENU_PERFIL);
         perfil_voltar_ao_duelo();
       } else {
+#ifdef NV_NUVIO_TV
+        // Live TV is the bottom of NUVIO TV: closing it closes the app (it
+        // already asked, see sair() in guia.c); anything else returns to it.
+        if (tela == TELA_GUIA) sair = 1;
+        else { trocarTela(TELA_GUIA); menu_definir_destino(MENU_GUIA); }
+#else
         trocarTela(TELA_HOME);
         menu_definir_destino(MENU_INICIO);
+#endif
       }
       saiuPorEsquerda = saiuPorCima = 0;
     }

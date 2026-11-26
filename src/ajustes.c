@@ -2768,6 +2768,9 @@ void ajustes_abrir_no_vidro(void) { abrirNoVidro = 1; }
 void ajustes_abrir_no_trakt(void) { abrirNoTrakt = 1; }
 void ajustes_abrir_na_espera_fonte(void) { abrirNaEspera = 1; }
 static int abrirNoGuia, guiaDaNovidades, pediuNovidades;
+// NUVIO TV first start: open straight on the new account form of this type.
+static int abrirNovaConta;
+void ajustes_abrir_nova_conta(int tipo) { abrirNovaConta = tipo; }
 void ajustes_abrir_no_guia(int daNovidades) { abrirNoGuia = 1; guiaDaNovidades = daNovidades ? 1 : 0; }
 int  ajustes_pediu_novidades(void) { int v = pediuNovidades; pediuNovidades = 0; return v; }
 // A tela do Guia de uso (ajustes_ux_guia.inc), aberta por cima das ilhas.
@@ -6906,7 +6909,12 @@ static void conferirTela(void) {
     if (TELA[i].tipo == IT_OPC && TELA[i].op >= 0 && TELA[i].op < AJ_N)
       vezes[TELA[i].op]++;
   for (i = 0; i < AJ_N; i++)
+#ifdef NV_NUVIO_TV
+    // NUVIO TV leaves most options out on purpose; only doubles are errors.
+    if (vezes[i] > 1)
+#else
     if (vezes[i] != 1 && !(vezes[i] == 0 && foraDestaPlataforma(i)))
+#endif
       printf("[ajustes] opcao %d (\"%s\") aparece %d vez(es) em TELA\n",
              i, OPCOES[i].rotulo, vezes[i]);
   if (TELA[0].tipo != IT_SEC)
@@ -6998,6 +7006,11 @@ int ajustes_iniciar(void) {
   // trocar a cor, nao achar onde ela mora.
   if (abrirNaCor) { abrirNaCor = 0; focarOpcao(AJ_TEMA); }
   if (abrirNaFonte) { abrirNaFonte = 0; focarOpcao(AJ_FONTE_UI); }
+  if (abrirNovaConta >= IPTV_XTREAM && abrirNovaConta <= IPTV_STALKER) {
+    int t = abrirNovaConta;
+    abrirNovaConta = 0;
+    ajIptvNovaAbrir(AJ_IPTV_ADD_XTREAM + t - IPTV_XTREAM);
+  } else abrirNovaConta = 0;
   // Os dois atalhos do cartao da 1.6.0: o layout da home (dentro do grupo
   // "Layout da Home", que focarOpcao abre) e a Interface de vidro.
   if (abrirNoLayout) { abrirNoLayout = 0; focarOpcao(AJ_HOME_LAYOUT); }

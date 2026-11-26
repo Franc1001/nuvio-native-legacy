@@ -236,12 +236,22 @@ static float gPreviewLargura(void) {
 #ifndef NV_GUIA_SO_CANAIS
 #define NV_GUIA_SO_CANAIS 1
 #endif
-enum { G_TOPO_BUSCAR = 0, G_TOPO_CATEGORIAS, G_TOPO_CARTOES, G_TOPO_LISTA, G_TOPO_OPCOES, G_TOPO_ADDONS, G_TOPO_FILTROS, G_TOPO_DIAG,
-       G_TOPO_LIMPAR, G_TOPO_PREVIEW, G_TOPO_N };
-#define G_TOPO_PRIMARIOS (G_TOPO_OPCOES + 1)
+// NUVIO TV (-DNV_NUVIO_TV): the Live TV-only app. Live TV is the whole app,
+// so this screen gains a Settings chip, Back climbs to the categories and then
+// asks before closing the app, and with no IPTV account yet it shows the
+// first-start screen (Xtream, M3U, Stalker) instead of the empty list.
+#ifdef NV_NUVIO_TV
+#define G_NUVIO_TV 1
+#else
+#define G_NUVIO_TV 0
+#endif
+enum { G_TOPO_BUSCAR = 0, G_TOPO_CATEGORIAS, G_TOPO_CARTOES, G_TOPO_LISTA, G_TOPO_OPCOES, G_TOPO_AJUSTES,
+       G_TOPO_ADDONS, G_TOPO_FILTROS, G_TOPO_DIAG, G_TOPO_LIMPAR, G_TOPO_PREVIEW, G_TOPO_N };
+#define G_TOPO_PRIMARIOS (G_TOPO_AJUSTES + 1)
 // The Cards/List pair is not shown when there is only one view.
 static int gTopoOculto(int i) {
-  return NV_GUIA_SO_CANAIS && (i == G_TOPO_CARTOES || i == G_TOPO_LISTA);
+  return (NV_GUIA_SO_CANAIS && (i == G_TOPO_CARTOES || i == G_TOPO_LISTA)) ||
+         (i == G_TOPO_AJUSTES && !G_NUVIO_TV);   // only NUVIO TV has no other way to Settings
 }
 
 #ifdef NV_TOUCH_UI
@@ -3285,6 +3295,11 @@ int guia_modo_do_canal(const char *id, int padrao) {
 
 static int pedLivetvDiag;
 int guia_pediu_livetv_diag(void) { int v = pedLivetvDiag; pedLivetvDiag = 0; return v; }
+// NUVIO TV: the Settings chip, and a card of the first-start screen (the
+// account type to add: IPTV_XTREAM, IPTV_M3U or IPTV_STALKER).
+static int pedAjustes, pedNovaConta;
+int guia_pediu_ajustes(void) { int v = pedAjustes; pedAjustes = 0; return v; }
+int guia_pediu_nova_conta(void) { int v = pedNovaConta; pedNovaConta = 0; return v; }
 
 static char pedidoBase[600], pedidoTipo[16];
 // The video hole opens only for the focused channel, by ID: duplicate
@@ -4284,11 +4299,36 @@ static int vsAbrirEm(int l, int i) {
 #ifdef NV_TOUCH_UI
 static void ponteiroVersoes(int l, int i) { vsAbrirEm(l, i); }
 #endif
+// NUVIO TV, FIRST START: no IPTV account and no channel yet. Three cards
+// (Xtream, M3U, Stalker); OK opens Settings straight on the new account form.
+#define G_SAIR_MS 3000u
+static Uint32 sairPerguntado;   // NUVIO TV: first Back on the categories asks
+static int bvFoco, bvOkArmado;
+static int gBoasVindas(void) {
+  return G_NUVIO_TV && !overlay && nCanais == 0 && iptv_contas(NULL, 0) == 0;
+}
 static void sair(void) {
   if (vpAberto) { vpAberto = 0; return; }
   if (vsAberto) { vsAberto = 0; return; }
   if (opcoesAberto) { opcoesAberto = 0; return; }
   if (painel) { if (paModo == 1 && fNivel) filtrosVoltar(); else painelFechar(); return; }
+#ifdef NV_NUVIO_TV
+  // Nothing behind Live TV in NUVIO TV: Back on the list climbs to the
+  // categories; there (or on the first-start screen) the first Back asks,
+  // like Home does, and only a second one within 3 s closes the app.
+  if (!overlay) {
+    Uint32 t = SDL_GetTicks();
+    if (!catAberto && nLinhas() > 0 && !gBoasVindas()) {
+      focoTopo = 0; catAbrir(2, 0); catUlt = 0; sairPerguntado = 0;
+      return;
+    }
+    if (!sairPerguntado || t - sairPerguntado > G_SAIR_MS) { sairPerguntado = t ? t : 1; return; }
+    sairPerguntado = 0;
+    catAberto = 0; aberta = 0; querSair = 1; previewParar();
+    dirSeg = 0; okDesde = 0; focoTopo = 0;
+    return;
+  }
+#endif
   if (catAberto) { catFechar(); return; }
   if (overlay) overlay = 0;
   else { aberta = 0; querSair = 1; previewParar(); }
@@ -4483,6 +4523,7 @@ static void topoAcionar(int item) {
   if (item == G_TOPO_BUSCAR) buscaAbrir();
   else if (item == G_TOPO_CATEGORIAS) catAbrir(2, 0);
   else if (item == G_TOPO_OPCOES) { opcoesAberto = 1; opcoesFoco = G_TOPO_ADDONS; }
+  else if (item == G_TOPO_AJUSTES) pedAjustes = 1;
   else if (item == G_TOPO_ADDONS) painelAbrir();
   else if (item == G_TOPO_FILTROS) filtrosAbrir();
   else if (item == G_TOPO_DIAG) pedLivetvDiag = 1;
@@ -4505,6 +4546,16 @@ void guia_evento(const SDL_Event *e) {
 
   if (e->type == SDL_KEYUP) {
     SDL_Keycode k = e->key.keysym.sym;
+#ifdef NV_NUVIO_TV
+    // First start: OK acts when it comes up, so its KEYUP is not left over
+    // for the Settings screen that opens next.
+    if (gBoasVindas()) {
+      if ((k == SDLK_RETURN || k == SDLK_KP_ENTER) && bvOkArmado) {
+        bvOkArmado = 0; pedNovaConta = IPTV_XTREAM + bvFoco;
+      }
+      return;
+    }
+#endif
     if (k == SDLK_UP || k == SDLK_DOWN) {
       dirSeg = 0;
       // Soltou a seta que abriu o painel: a lista fica, com o foco onde parou.
@@ -4530,6 +4581,18 @@ void guia_evento(const SDL_Event *e) {
   Uint32 agora = SDL_GetTicks();
   // A dica sai na primeira tecla; a tecla segue valendo.
   dicaDesde = 0;
+#ifdef NV_NUVIO_TV
+  { int volta = k == SDLK_AC_BACK || k == SDLK_ESCAPE || k == SDLK_BACKSPACE ||
+                k == SDLK_DELETE || e->key.keysym.scancode == NV_SCANCODE_BACK;
+    if (!volta) sairPerguntado = 0;   // the exit question lasts until another key
+    if (gBoasVindas()) {
+      if (volta) { sair(); return; }
+      if (k == SDLK_LEFT || k == SDLK_UP) { if (bvFoco > 0) bvFoco--; return; }
+      if (k == SDLK_RIGHT || k == SDLK_DOWN) { if (bvFoco < 2) bvFoco++; return; }
+      if ((k == SDLK_RETURN || k == SDLK_KP_ENTER) && !e->key.repeat) bvOkArmado = 1;
+      return;
+    } }
+#endif
 
   if (vpAberto) {
     if (k == SDLK_AC_BACK || k == SDLK_ESCAPE || k == SDLK_BACKSPACE ||
@@ -6195,7 +6258,7 @@ static void desenharPainelCategorias(float a) {
       txt_desenhar_alpha(tn, r.x + 24.0f, r.y + (r.h - (float)tn.h) * 0.5f, la); }
   }
   gfx_sem_recorte();
-  { TxtLinha t = txt_linha_corta(TXT_CAPTION, i18n("OK entra  ·  Voltar fecha"),
+  { TxtLinha t = txt_linha_corta(TXT_CAPTION, i18n(G_NUVIO_TV ? "OK entra  ·  Voltar sai" : "OK entra  ·  Voltar fecha"),
                                  128, 130, 138, 255, G_CAT_W - 96.0f);
     txt_desenhar_alpha(t, x0 + 56.0f, NV_TELA_H - 60.0f, ea); }
 }
@@ -6672,6 +6735,7 @@ static void gTopoRotulos(const char **rot) {
   rot[G_TOPO_CARTOES] = i18n("Cartões");
   rot[G_TOPO_LISTA]   = i18n("Lista");
   rot[G_TOPO_OPCOES]  = i18n("Opções");
+  rot[G_TOPO_AJUSTES] = i18n("Ajustes");
   rot[G_TOPO_ADDONS]  = i18n("Addons");
   rot[G_TOPO_FILTROS] = i18n("Filtros da Live TV");
   // DIAGNOSTICO na barra (dono, 01/10: o controle do Android nao tem a tecla
@@ -6685,7 +6749,7 @@ static void gTopoLarguras(const char **rot, float *w) {
   for (int i = 0; i < G_TOPO_N; i++)
     w[i] = gTopoOculto(i) ? 0.0f : (float)txt_largura(G_CHIP_TEXTO, rot[i])
            + 2.0f * G_CHIP_PAD
-           + (i == G_TOPO_PREVIEW ? 20.0f : (i == G_TOPO_CATEGORIAS || i == G_TOPO_BUSCAR) ? 26.0f : 0.0f);
+           + (i == G_TOPO_PREVIEW ? 20.0f : (i == G_TOPO_CATEGORIAS || i == G_TOPO_BUSCAR || i == G_TOPO_AJUSTES) ? 26.0f : 0.0f);
 }
 
 // Four control groups stay below the title and clear of channel art.
@@ -7100,7 +7164,7 @@ static float desenharTopo(float a) {
     ct = f > 0.5f ? ajustes_tinta_foco() : sel ? 245 : 168;
     { // ct+1 estourava 255 -> 0 no canal verde (tinta branca = magenta no foco).
       float iconeW = i == G_TOPO_PREVIEW ? 20.0f
-                   : (i == G_TOPO_CATEGORIAS || i == G_TOPO_BUSCAR) ? 26.0f : 0.0f;
+                   : (i == G_TOPO_CATEGORIAS || i == G_TOPO_BUSCAR || i == G_TOPO_AJUSTES) ? 26.0f : 0.0f;
       TxtLinha t = txt_linha_corta(G_CHIP_TEXTO, rot[i], ct, ct < 255 ? ct + 1 : 255,
                           ct + 5 > 255 ? 255 : ct + 5, 255, r.w - 2.0f * G_CHIP_PAD - iconeW);
       float tx = r.x + (r.w - (float)t.w) * 0.5f;
@@ -7112,11 +7176,12 @@ static float desenharTopo(float a) {
         else if (previewLigado) gfx_cor(d, 0.5f, 0.30f, 0.84f, 0.46f, a);
         else               gfx_cor(d, 0.5f, 0.42f, 0.43f, 0.47f, a);
         tx = d.x + 20.0f;
-      } else if (i == G_TOPO_BUSCAR) {
+      } else if (i == G_TOPO_BUSCAR || i == G_TOPO_AJUSTES) {
         // A lupa do menu lateral: o chip se le como busca antes do texto.
+        // NUVIO TV's Settings chip uses the side menu's gear the same way.
         float c = (float)ct / 255.0f;
         gfx_icone((GfxRect){ r.x + G_CHIP_PAD - 2.0f, r.y + (r.h - 20.0f) * 0.5f, 20.0f, 20.0f },
-                  "menu_search", c, c, c, a);
+                  i == G_TOPO_AJUSTES ? "menu_settings" : "menu_search", c, c, c, a);
         tx = r.x + G_CHIP_PAD + 26.0f;
       } else if (i == G_TOPO_CATEGORIAS) {
         // Tres tracos de "lista": o chip se le como menu antes do texto.
@@ -8324,6 +8389,64 @@ static void toqueGuiaRetomar(void) {
 }
 #endif
 
+// NUVIO TV first start (see gBoasVindas): Home's title and three cards, the
+// focused one inside the Home focus ring. Portrait stacks the cards.
+static void ponteiroBvFoco(int i, int b) { (void)b; bvFoco = i; }
+static void ponteiroBvOk(int i, int b) { (void)b; bvFoco = i; pedNovaConta = IPTV_XTREAM + i; }
+static void desenharBoasVindas(float a) {
+  static const char *tit[3] = { "Xtream Codes", "Lista M3U", "Portal Stalker" };
+  static const char *sub[3] = { "Servidor, usuário e senha", "Um link para a sua lista de canais",
+                                "Endereço do portal e MAC" };
+  float ar, ag, ab, x = G_AREA_X, y, w, h, gap = 40.0f;
+  int i, ret = gRetrato();
+  ajustes_acento(&ar, &ag, &ab);
+  // A soft glow of the accent in the top right, where Live TV has the picture.
+  gfx_luz_canto((GfxRect){ NV_TELA_W * 0.5f, 0, NV_TELA_W * 0.5f, NV_TELA_H * 0.6f }, 0.0f,
+                NV_TELA_W * 0.42f, -NV_TELA_H * 0.1f, NV_TELA_W * 0.5f, ar, ag, ab, 0.16f * a);
+  { TxtLinha t = txt_linha_corta(TXT_TITULO1, i18n("Bem-vindo ao NUVIO TV"), 244, 243, 247, 255, G_AREA_W);
+    if (ret && (float)t.w >= G_AREA_W - 1.0f) t = txt_linha_corta(TXT_TITULO2, i18n("Bem-vindo ao NUVIO TV"), 244, 243, 247, 255, G_AREA_W);
+    txt_desenhar_alpha(t, x, ret ? gTopoFim + 40.0f : 150.0f, a);
+    y = (ret ? gTopoFim + 40.0f : 150.0f) + (float)t.h + 16.0f; }
+  y += txt_bloco_corta(TXT_DET_META, i18n("Adicione sua conta IPTV para começar a assistir. Você só faz isso uma vez."),
+                       189, 189, 194, x, y, G_AREA_W, 34.0f, a, 2) + (ret ? 48.0f : 96.0f);
+  w = ret ? G_AREA_W : (G_AREA_W - 2.0f * gap) / 3.0f;
+  h = ret ? 150.0f : 200.0f;
+  for (i = 0; i < 3; i++) {
+    GfxRect c = { ret ? x : x + (float)i * (w + gap), ret ? y + (float)i * (h + 24.0f) : y, w, h };
+    int f = i == bvFoco;
+    gfx_cor(c, 20.0f / c.h, f ? 0.125f : 0.098f, f ? 0.125f : 0.098f, f ? 0.133f : 0.106f, a);
+    if (f && ajustes_borda_foco()) gfx_anel_fora(c, 20.0f / c.h, 2.0f, 3.0f, ar, ag, ab, a);
+    { TxtLinha t = txt_linha_corta(TXT_ROW_TITULO, i18n(tit[i]), 244, 243, 247, 255, c.w - 68.0f);
+      txt_desenhar_alpha(t, c.x + 34.0f, c.y + 34.0f, a);
+      txt_bloco_corta(TXT_DET_META2, i18n(sub[i]), 168, 168, 174, c.x + 34.0f, c.y + 42.0f + (float)t.h,
+                      c.w - 68.0f, 30.0f, a, 2); }
+    if (i == 0) {
+      TxtLinha tg = txt_linha(TXT_MINI, i18n("A maioria dos provedores"), 214, 214, 218, 255);
+      GfxRect r = { c.x + c.w - (float)tg.w - 46.0f, c.y + 26.0f, (float)tg.w + 20.0f, (float)tg.h + 10.0f };
+      if (r.x > c.x + c.w * 0.45f) {
+        gfx_anel(r, 6.0f / r.h, 1.5f, 1, 1, 1, 0.26f * a);
+        txt_desenhar_alpha(tg, r.x + 10.0f, r.y + 5.0f, a);
+      }
+    }
+    if (a > 0.99f) ponteiro_alvo(c.x, c.y, c.w, c.h, ponteiroBvFoco, ponteiroBvOk, i, 0);
+  }
+  y = ret ? y + 3.0f * (h + 24.0f) + 24.0f : y + h + 60.0f;
+  txt_bloco_corta(TXT_DET_META2, i18n("Servidores de reserva e outras contas ficam em Ajustes depois."),
+                  141, 141, 147, x, y, G_AREA_W, 30.0f, a, 2);
+  { TxtLinha t = txt_linha_corta(TXT_DET_META2, i18n("OK escolhe  ·  ← → muda  ·  Voltar sai"),
+                                 140, 142, 150, 255, G_AREA_W);
+    txt_desenhar_alpha(t, x, NV_TELA_H - 50.0f - (float)t.h * 0.5f, a); }
+}
+
+// NUVIO TV: the question after the first Back, as on Home (3 s).
+static void desenharSairPergunta(float a) {
+  if (!sairPerguntado || SDL_GetTicks() - sairPerguntado > G_SAIR_MS) return;
+  { TxtLinha t = txt_linha(TXT_CAPTION, i18n("Aperte Voltar de novo para sair do aplicativo"), 232, 234, 240, 255);
+    GfxRect caixa = { (NV_TELA_W - (float)t.w - 56.0f) * 0.5f, NV_TELA_H - 118.0f, (float)t.w + 56.0f, (float)t.h + 28.0f };
+    gfx_vidro_ou_solido(caixa, 14.0f / caixa.h, GFX_VIDRO_DENS, a, 0.10f, 0.10f, 0.12f, 0.96f);
+    txt_desenhar_alpha(t, caixa.x + 28.0f, caixa.y + 14.0f, a); }
+}
+
 void guia_desenhar(Uint32 agora) {
 #ifdef NV_TOUCH_UI
   if (!telefoneui_ativo()) toqueLimpar();
@@ -8358,6 +8481,7 @@ void guia_desenhar(Uint32 agora) {
   { GfxRect tela = { 0, 0, NV_TELA_W, NV_TELA_H };
     gfx_cor(tela, 0.0f, NV_COR_FUNDO_R, NV_COR_FUNDO_G, NV_COR_FUNDO_B,
             1.0f); }
+  if (gBoasVindas()) { desenharBoasVindas(a); desenharSairPergunta(a); return; }
 
   // Open the native video hole before drawing header text over the hero.
   if (temLinhas) desenharHero(a, agoraT, tFoco);
@@ -8699,6 +8823,7 @@ void guia_desenhar(Uint32 agora) {
   if (painel) { if (paModo == 1) desenharPainelFiltros(a); else desenharPainelAddons(a); }
   desenharGrupos(a);
   desenharLimpar(a);
+  desenharSairPergunta(a);
   // O CANAL NO AR ENCOLHENDO para o preview: o furo segue o degrau da janela
   // do player por cima de tudo, e o video "pousa" no preview.
   { float x, y, w, h;

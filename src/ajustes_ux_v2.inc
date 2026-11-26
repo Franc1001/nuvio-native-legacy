@@ -200,7 +200,12 @@ static int aj2MenuFocado(void) { return focoIndice ? uxIndice : -1; }
 // Os tres grupos do indice: so a apresentacao. As categorias seguem a ordem de
 // TELA[] (ajustes_ux_tela.inc, 2.0.3: Assistir = 0-3, Telas = 4-7, o resto em
 // Conta e sistema); nada aqui mexe em valor[] nem em CHAVE[].
+#ifdef NV_NUVIO_TV
+// NUVIO TV: Assistir = Live TV, Playback, Languages; Telas = Appearance; the rest.
+static int aj2Grupo(int s) { return s < AJS_APARENCIA ? 0 : s < AJS_DESEMPENHO ? 1 : 2; }
+#else
 static int aj2Grupo(int s) { return s < AJS_HOME ? 0 : s < AJS_CONTAS ? 1 : 2; }
+#endif
 static int aj2GrupoDe(int s) { return aj2Grupo(s); }
 static int aj2GrupoIni(int s) { return s == 0 || aj2Grupo(s) != aj2Grupo(s - 1); }
 static const char *aj2GrupoNome(int g) { return g == 0 ? "Assistir" : g == 1 ? "Telas" : "Conta e sistema"; }
@@ -234,9 +239,13 @@ static void aj2MenuValor(int sec, char *b, size_t n) {
       snprintf(b, n, "%s · %s", i18n(textoValor(AJ_FUNDO)), i18n(lig(AJ_VIDRO) ? "Vidro ligado" : "Sem vidro"));
       return;
     case AJS_REPRODUCAO:   // "4K · Fonte: o Nuvio escolhe"
+#ifdef NV_NUVIO_TV
+      op = AJ_PROPORCAO_PADRAO; break;   // NUVIO TV has no source choice
+#else
       snprintf(b, n, "%s · %s", i18n(textoValor(AJ_QUALIDADE)),
                i18n(lig(AJ_FONTE_MANUAL) ? "Fonte: você escolhe" : "Fonte: o Nuvio escolhe"));
       return;
+#endif
     case AJS_FONTES: snprintf(b, n, "%s", ajEstadoAcao(AJ_ADDONS)); return;
     case AJS_IDIOMAS: {   // "Portugues · Audio: Original do titulo"
       char a[120];

@@ -10,6 +10,90 @@
 // MAIS() da categoria: uma linha "Mais opcoes · N" fechada no fim da lista, que
 // o OK abre no lugar (sem terceira tela). A pilula "Avancadas" do indice abre
 // todas de uma vez. uxAvancada() le esta tabela; nao ha outra lista.
+#ifdef NV_NUVIO_TV
+// NUVIO TV: the Live TV-only app keeps Live TV first and only what a
+// channels app uses. Every option still exists (CHAVE and valor[] are
+// positional); the ones left out keep their defaults.
+static const Item TELA[] = {
+  SEC("TV ao vivo", "Provedor e solução de problemas ao assistir canais", "aj_tv-minimal-play"),
+    ROT("Contas de TV ao vivo"),
+      OPC(AJ_IPTV_ORDEM), OPC(AJ_IPTV_CONTA), OPC(AJ_IPTV_NOME), OPC(AJ_IPTV_ATIVA),
+      OPC(AJ_IPTV_LISTA_STALKER), OPC(AJ_IPTV_ADD_STALKER),
+      OPC(AJ_IPTV_LISTA_XTREAM), OPC(AJ_IPTV_ADD_XTREAM),
+      OPC(AJ_IPTV_LISTA_M3U), OPC(AJ_IPTV_ADD_M3U),
+      OPC(AJ_IPTV_REMOVER), OPC(AJ_IPTV_ACOES), OPC(AJ_IPTV_EXCLUIR),
+      OPC(AJ_XTREAM_SERVIDOR), OPC(AJ_XTREAM_USUARIO), OPC(AJ_XTREAM_SENHA),
+      OPC(AJ_XTREAM_CONTA), OPC(AJ_XTREAM_CONEXOES), OPC(AJ_XTREAM_LIMPAR), OPC(AJ_STALKER_PORTAL),
+      OPC(AJ_STALKER_MAC), OPC(AJ_STALKER_LIMPAR),
+      OPC(AJ_M3U_URL), OPC(AJ_M3U_EPG), OPC(AJ_M3U_LIMPAR),
+      OPC(AJ_IPTV_RES_USO), OPC(AJ_IPTV_RES_AUTO), OPC(AJ_IPTV_RES_LISTA),
+      OPC(AJ_IPTV_RES_ADD), OPC(AJ_IPTV_RES_REM),
+      OPC(AJ_IPTV_SALVAR), OPC(AJ_IPTV_CANCELAR),
+    ROT("Guia de TV"),
+      // Merged channel versions first: the owner's request for NUVIO TV.
+      OPC(AJ_LTV_JUNTAR), OPC(AJ_GUIA_ORDEM), OPC(AJ_GUIA_FONTE), OPC(AJ_GUIA_RECARREGAR),
+      OPC(AJ_GUIA_CATEGORIAS), OPC(AJ_LIVETV_SUGERIR),
+    ROT("Se o canal não abre"),
+      OPC(AJ_LIVETV_DIAG), OPC(AJ_LIVETV_RES), OPC(AJ_LIVETV_ESPERA),
+    MAIS(),
+    ROT("Se o canal não abre"),
+      OPC(AJ_LIVETV_FORMATO), OPC(AJ_LIVETV_MODO), OPC(AJ_LIVETV_PROXY),
+    ROT("Guia de TV"),
+      OPC(AJ_EPG_PAIS), OPC(AJ_EPG_MEMORIA),
+      OPC(AJ_URL_LISTA), OPC(AJ_URL_M3U_ADD), OPC(AJ_URL_XMLTV_ADD), OPC(AJ_URL_REM),
+    ROT("Addons"),
+      OPC(AJ_ADDON_LOCAL_ADD), OPC(AJ_ADDON_LOCAL_LISTA), OPC(AJ_ADDON_LOCAL_REM),
+
+  SEC("Reprodução", "Qualidade, som e o que o player faz", "aj_circle-play"),
+    ROT("Som e vídeo desta TV"),
+      OPC(AJ_PROPORCAO_PADRAO), OPC(AJ_BRILHO_PLAYER), OPC(AJ_HDR_UI), OPC(AJ_DTS_AC3),
+#ifdef NV_ANDROID
+      OPC(AJ_TUNNELING),
+#endif
+#if defined(NV_ANDROID) || (!defined(NV_TPK) && !defined(__EMSCRIPTEN__))
+      OPC(AJ_BUFFER),
+#endif
+
+  SEC("Idiomas e legendas", "Idioma da interface, áudio, legenda e metadados", "aj_languages"),
+    ROT("Idiomas"),
+      OPC(AJ_IDIOMA), OPC(AJ_AUD_LINGUA), OPC(AJ_LEG_LINGUA), OPC(AJ_LEG_MOSTRAR),
+
+  SEC("Aparência", "Cor, transparência, fonte, animações e relógio", "aj_palette"),
+#ifdef NV_TOUCH_UI
+    OPC(AJ_INTERFACE_MODO),
+#endif
+#ifdef NV_TECLADO_SIS
+    OPC(AJ_TECLADO_ANDROID),
+#endif
+    ROT("Cores e vidro"),
+      OPC(AJ_TEMA), OPC(AJ_FUNDO), OPC(AJ_VIDRO), OPC(AJ_VIDRO_CONTORNO), OPC(AJ_FOCO_ACENTO),
+      OPC(AJ_BORDA_FOCO), OPC(AJ_SUAVIZAR_DEGRADES),
+    ROT("Texto e tamanho"),
+      OPC(AJ_FONTE_UI), OPC(AJ_TAMANHO_UI), OPC(AJ_ESCALA_TEXTO), OPC(AJ_TAMANHO_AJUSTES), OPC(AJ_LAYOUT_AJUSTES),
+    ROT("Movimento e relógio"),
+      OPC(AJ_ANIM), OPC(AJ_RELOGIO), OPC(AJ_RELOGIO_12H),
+    MAIS(),
+    ROT("Cores e vidro"), OPC(AJ_VIDRO_OPAC), OPC(AJ_VIDRO_FOSCO), OPC(AJ_VIDRO_QUALIDADE),
+
+  SEC("Esta TV", "Resolução, imagens, efeitos e diagnóstico", "aj_monitor-cog"),
+    OPC(AJ_RESOLUCAO), OPC(AJ_GPU_EFEITOS), OPC(AJ_AMPLIAR_UI), OPC(AJ_AMPLIACAO_ALGO), OPC(AJ_AMPLIACAO_NITIDEZ),
+    OPC(AJ_HDR_INTERFACE), OPC(AJ_NAV_RAPIDA), OPC(AJ_MEDIDOR), OPC(AJ_DIAGNOSTICO), OPC(AJ_VELOCIDADE), OPC(AJ_ESPACO),
+#ifdef NV_ANDROID
+    OPC(AJ_LIMPAR_CACHE),
+#endif
+    MAIS(),
+    ROT("Memória"), OPC(AJ_TEX_MB),
+
+  SEC("Sobre e ajuda", "Guia de uso, versão, atualização e registros", "aj_info"),
+    OPC(AJ_AVISO_LEGAL),
+    ROTS("App", ""), OPC(AJ_VERSAO_I),
+    ROTS("Registro", "para quem faz o app"),
+      OPC(AJ_VER_REGISTRO), OPC(AJ_LOG_REDE),
+#ifdef NV_ANDROID
+      OPC(AJ_BAIXAR_REGISTRO),
+#endif
+};
+#else
 static const Item TELA[] = {
   // ---- ASSISTIR ------------------------------------------------------------------
   SEC("Reprodução", "Qualidade, som e o que o player faz", "aj_circle-play"),
@@ -274,9 +358,20 @@ OPC(AJ_RESOLUCAO), OPC(AJ_GPU_EFEITOS), OPC(AJ_AMPLIAR_UI), OPC(AJ_AMPLIACAO_ALG
       OPC(AJ_BAIXAR_REGISTRO),
 #endif
 };
+#endif
 #define AJ_N_TELA (int)(sizeof TELA / sizeof *TELA)
 #define AJ_MAX_SECOES 16
 
+#ifdef NV_NUVIO_TV
+static const char *SECAO_AJUDA[] = {
+  "Conexão dos provedores e diagnóstico de reprodução de canais ao vivo.",
+  "Qualidade máxima, Dolby Vision e Atmos, e o que acontece durante e depois do vídeo.",
+  "Idioma da interface, preferências de áudio e legenda e idioma dos metadados.",
+  "Cor de destaque, transparência, tipografia, animações e relógio na tela.",
+  "Recursos e diagnóstico deste aparelho.",
+  "Versão instalada, atualização e envio de registros para a equipe do app.",
+};
+#else
 // Texto exibido no painel ao selecionar uma categoria. Mesma ordem dos SECs.
 static const char *SECAO_AJUDA[] = {
   "Qualidade máxima, Dolby Vision e Atmos, e o que acontece durante e depois do vídeo.",
@@ -291,6 +386,7 @@ static const char *SECAO_AJUDA[] = {
   "Recursos e diagnóstico deste aparelho.",
   "Versão instalada, atualização e envio de registros para a equipe do app.",
 };
+#endif
 
 // AVANCADA = vem depois do MAIS() da propria categoria. Calculado uma vez em
 // montarTela (ajustes.c); a busca e os atalhos perguntam por aqui.

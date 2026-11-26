@@ -82,6 +82,7 @@ static void captura(const char *nome, SDL_Window *win) {
 //
 // `estado` e `nCanais` sao estaticos de guia.c, que este teste inclui — dai
 // dar para encenar o caso sem addon no ar e sem esperar dois timeouts.
+static int shotW = 1920, shotH = 1080;   // window; a tablet run changes it
 static void capturaTela(const char *nome, SDL_Window *win, int comCanais) {
   int i;
   for (i = 0; i < 90; i++) {
@@ -96,18 +97,18 @@ static void capturaTela(const char *nome, SDL_Window *win, int comCanais) {
     guia_desenhar(SDL_GetTicks());
     glem_desenhar(SDL_GetTicks());
     if (i == 89) {
-      unsigned char *pix = malloc(1920 * 1080 * 4);
+      unsigned char *pix = malloc((size_t)shotW * shotH * 4);
       SDL_Surface *s;
       int y;
       assert(pix);
-      glReadPixels(0, 0, 1920, 1080, GL_RGBA, GL_UNSIGNED_BYTE, pix);
-      s = SDL_CreateRGBSurfaceWithFormat(0, 1920, 1080, 32,
+      glReadPixels(0, 0, shotW, shotH, GL_RGBA, GL_UNSIGNED_BYTE, pix);
+      s = SDL_CreateRGBSurfaceWithFormat(0, shotW, shotH, 32,
                                          SDL_PIXELFORMAT_RGBA32);
       assert(s);
-      for (y = 0; y < 1080; y++)
+      for (y = 0; y < shotH; y++)
         memcpy((char *)s->pixels + y * s->pitch,
-               pix + (1079 - y) * 1920 * 4, 1920 * 4);
-      if (!previewLigado && !player_mini_no_guia_ativo()) {
+               pix + (size_t)(shotH - 1 - y) * shotW * 4, (size_t)shotW * 4);
+      if (shotW == 1920 && shotH == 1080 && !previewLigado && !player_mini_no_guia_ativo()) {
         unsigned char *p = (unsigned char *)s->pixels + 240 * s->pitch + 1800 * 4;
         assert(p[3] == 255 && p[0] < 100 && p[2] < 100);
       }
@@ -276,15 +277,21 @@ int main(int argc, char **argv) {
   IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+#ifdef NV_TOUCH_UI
+  // Tablet in mobile mode (touch build): NUVIO_SHOT_TABLET=1440x1080 keeps the
+  // device shape with a virtual short edge of 1080, as on Android.
+  { const char *t = getenv("NUVIO_SHOT_TABLET");
+    if (t && sscanf(t, "%dx%d", &shotW, &shotH) == 2) { layout_tela_definir(shotW, shotH); layout_modo_definir(1); } }
+#endif
   w = SDL_CreateWindow("Nuvio: cartao de canal", SDL_WINDOWPOS_CENTERED,
-                       SDL_WINDOWPOS_CENTERED, 1920, 1080,
+                       SDL_WINDOWPOS_CENTERED, shotW, shotH,
                        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
   assert(w);
   gl = SDL_GL_CreateContext(w);
   assert(gl);
   SDL_GL_SetSwapInterval(0);
-  glViewport(0, 0, 1920, 1080);
-  gfx_tamanho_alvo(1920, 1080);
+  glViewport(0, 0, shotW, shotH);
+  gfx_tamanho_alvo(shotW, shotH);
   if (getenv("NUVIO_SHOT_VIDRO")) ajustes_definir_vidro(1);
   if (getenv("NUVIO_SHOT_TOPO")) {
     extern void ajustes_teste_vidro_env(void);

@@ -143,8 +143,12 @@ static float gPreviewLargura(void);
 // the focused row carries the Home focus ring.
 static int gVidro(void);
 #define G_V_TOPO     336.0f    // list (first category title) under the hero
-#define G_V_PREVIEW 1152.0f    // 16:9, 1152x648, flush with the top right
-#define G_V_LISTA_W  700.0f    // channel column
+// TV: 1920 wide, a 700 px column and a 1152x648 picture. A tablet in mobile
+// mode keeps its real shape (16:10 is 1728 wide, 4:3 only 1440): the column
+// narrows to 560 at most and the picture to what is left, so it never slides
+// under the channel names.
+#define G_V_LISTA_W  fminf(700.0f, fmaxf(560.0f, NV_TELA_W * 0.365f))
+#define G_V_PREVIEW  fminf(1152.0f, NV_TELA_W - (G_AREA_X + G_V_LISTA_W - 12.0f))
 #define G_V_HERO_Y   128.0f    // hero title top
 #define G_HERO_Y   (gRetrato() ? gTopoFim + 60.0f : 204.0f)
 // PREVIEW: 800x450 e 41,7% da largura, 16:9 exato. Os MESMOS numeros furam a
@@ -159,7 +163,7 @@ static int gVidro(void);
 #define G_PREVIEW_RAIO (gRetrato() ? 16.0f : 0.0f)          // px; vira fracao do menor lado no uso
 // Ficha do canal a esquerda do preview, com 48 de respiro ate ele.
 #define G_INFO_X   G_AREA_X
-#define G_INFO_W   (gRetrato() ? G_AREA_W : G_PREVIEW_X - 48.0f - G_INFO_X)
+#define G_INFO_W   (gRetrato() ? G_AREA_W : gVidro() ? G_V_LISTA_W : G_PREVIEW_X - 48.0f - G_INFO_X)
 // Topo da grade (regua do modo lista, primeira fileira do modo cartoes).
 #define G_TOPO     (G_PREVIEW_Y + G_PREVIEW_H + 22.0f)
 #define G_CARD_W   330.0f
@@ -5765,8 +5769,9 @@ const char *guia_desc_livre(const char *desc, char *buf, size_t n) {
 
 // Home look: how far the page fades into the picture from its left edge and
 // from its bottom (the logo and "loading" sit in what stays visible).
-#define G_V_VEU_ESQ  340.0f
-#define G_V_VEU_BASE 240.0f
+#define G_V_VEU_ESQ  (G_PREVIEW_W * 0.295f)   // 340 px at 1152
+#define G_V_VEU_BASE (G_PREVIEW_H * 0.37f)    // 240 px at 648
+static int guiaCamadaAberta(void);
 // Outlined chip of the hero (versions, favourite): Home's quiet secondary
 // pill, 32 px high like the LIVE badge next to it. Returns the width.
 static float gChipContorno(const char *rot, const char *fim, float x, float y, float a) {
@@ -5897,8 +5902,15 @@ static void desenharHero(float a, time_t agoraT, time_t tFoco) {
       cx += guia_selo_ao_vivo(cx, cy, ha) + 12.0f;
       if (nv > 1) {
         char rot[48];
+        float cw;
         snprintf(rot, sizeof rot, i18n("%d versões"), nv);
-        cx += gChipContorno(rot, "\xe2\x80\xba", cx, cy, ha) + 12.0f;
+        cw = gChipContorno(rot, "\xe2\x80\xba", cx, cy, ha);
+#ifdef NV_TOUCH_UI
+        // Tablet: tapping the chip opens the versions, like RIGHT.
+        if (a > 0.99f && !guiaCamadaAberta())
+          ponteiro_alvo(cx - 6.0f, cy - 8.0f, cw + 12.0f, 48.0f, NULL, ponteiroVersoes, focoLin, focoCol);
+#endif
+        cx += cw + 12.0f;
       }
       if (c->fav) {
         char rot[64];
